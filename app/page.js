@@ -35,6 +35,44 @@ function involvementPct(m) {
   return 20;
 }
 
+// Comprueba si un ejercicio coincide con el texto de búsqueda, mirando no solo
+// el nombre sino también patrones, músculos, equipamiento, objetivos y tags —
+// así una búsqueda como "rodilla" encuentra ejercicios de extensión de rodilla
+// aunque esa palabra no esté en el nombre del ejercicio.
+function matchesSearch(e, searchTerm) {
+  if (!searchTerm) return true;
+  const q = searchTerm.trim().toLowerCase();
+  const haystack = [
+    e.name,
+    e.short_description,
+    ...(e.patterns || []),
+    ...(e.muscles || []).map((m) => m.name),
+    ...(e.equipment || []).map((eq) => eq.name),
+    ...(e.objectives || []),
+    ...(e.tags || []),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(q);
+}
+
+// Comprueba si un ejercicio cumple un subconjunto de filtros. Se usa tanto
+// para el resultado final (con todos los filtros) como para calcular, para
+// cada desplegable, qué opciones siguen teniendo sentido dado el resto de
+// filtros ya activos — sin contar el propio filtro que se está calculando.
+function matchesFilters(e, f) {
+  const catName = CATEGORY_NAMES[e.category] || e.category;
+  if (f.search && !matchesSearch(e, f.search)) return false;
+  if (f.category && catName !== f.category) return false;
+  if (f.pattern && !(e.patterns || []).includes(f.pattern)) return false;
+  if (f.muscle && !(e.muscles || []).some((m) => m.name === f.muscle)) return false;
+  if (f.equip && !(e.equipment || []).some((eq) => eq.name === f.equip)) return false;
+  if (f.level && e.level !== f.level) return false;
+  if (f.objective && !(e.objectives || []).includes(f.objective)) return false;
+  return true;
+}
+
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState("library");
   const [exercises, setExercises] = useState([]);
@@ -80,32 +118,64 @@ export default function HomePage() {
     loadData();
   }, []);
 
-  const patternOptions = useMemo(() => unique(exercises.flatMap((e) => e.patterns || [])), [exercises]);
-  const muscleOptions = useMemo(
-    () => unique(exercises.flatMap((e) => (e.muscles || []).map((m) => m.name))),
-    [exercises]
-  );
-  const equipOptions = useMemo(
-    () => unique(exercises.flatMap((e) => (e.equipment || []).map((eq) => eq.name))),
-    [exercises]
-  );
-  const objectiveOptions = useMemo(() => unique(exercises.flatMap((e) => e.objectives || [])), [exercises]);
-  const categoryOptions = useMemo(() => unique(exercises.map((e) => CATEGORY_NAMES[e.category] || e.category)), [
-    exercises,
-  ]);
+  // Cada desplegable calcula sus propias opciones aplicando TODOS los demás
+  // filtros activos excepto el suyo propio. Resultado: si seleccionas
+  // "Sentadilla" como patrón, el desplegable de músculo deja de mostrar
+  // "Deltoides" porque ningún ejercicio real cumple ambas condiciones a la
+  // vez. Funciona en cualquier orden en que actives los filtros.
+  const categoryOptions = useMemo(() => {
+    const subset = exercises.filter((e) => matchesFilters(e, { search, pattern, muscle, equip, level, objective }));
+    return unique(subset.map((e) => CATEGORY_NAMES[e.category] || e.category));
+  }, [exercises, search, pattern, muscle, equip, level, objective]);
+
+  const patternOptions = useMemo(() => {
+    const subset = exercises.filter((e) => matchesFilters(e, { search, category, muscle, equip, level, objective }));
+    return unique(subset.flatMap((e) => e.patterns || []));
+  }, [exercises, search, category, muscle, equip, level, objective]);
+
+  const muscleOptions = useMemo(() => {
+    const subset = exercises.filter((e) => matchesFilters(e, { search, category, pattern, equip, level, objective }));
+    return unique(subset.flatMap((e) => (e.muscles || []).map((m) => m.name)));
+  }, [exercises, search, category, pattern, equip, level, objective]);
+
+  const equipOptions = useMemo(() => {
+    const subset = exercises.filter((e) => matchesFilters(e, { search, category, pattern, muscle, level, objective }));
+    return unique(subset.flatMap((e) => (e.equipment || []).map((eq) => eq.name)));
+  }, [exercises, search, category, pattern, muscle, level, objective]);
+
+  const levelOptions = useMemo(() => {
+    const subset = exercises.filter((e) => matchesFilters(e, { search, category, pattern, muscle, equip, objective }));
+    return unique(subset.map((e) => e.level)).sort((a, b) => LEVEL_RANK[a] - LEVEL_RANK[b]);
+  }, [exercises, search, category, pattern, muscle, equip, objective]);
+
+  const objectiveOptions = useMemo(() => {
+    const subset = exercises.filter((e) => matchesFilters(e, { search, category, pattern, muscle, equip, level }));
+    return unique(subset.flatMap((e) => e.objectives || []));
+  }, [exercises, search, category, pattern, muscle, equip, level]);
+
+  // Si un filtro ya seleccionado deja de ser una opción válida (porque otro
+  // filtro cambió y ya no hay ningún ejercicio que cumpla ambos), se trata
+  // como "sin seleccionar" tanto visualmente como en el resultado — sin
+  // necesidad de que el usuario lo quite a mano.
+  const effectiveCategory = categoryOptions.includes(category) ? category : "";
+  const effectivePattern = patternOptions.includes(pattern) ? pattern : "";
+  const effectiveMuscle = muscleOptions.includes(muscle) ? muscle : "";
+  const effectiveEquip = equipOptions.includes(equip) ? equip : "";
+  const effectiveLevel = levelOptions.includes(level) ? level : "";
+  const effectiveObjective = objectiveOptions.includes(objective) ? objective : "";
 
   const filtered = useMemo(() => {
-    let list = exercises.filter((e) => {
-      const catName = CATEGORY_NAMES[e.category] || e.category;
-      if (search && !e.name.toLowerCase().includes(search.trim().toLowerCase())) return false;
-      if (category && catName !== category) return false;
-      if (pattern && !(e.patterns || []).includes(pattern)) return false;
-      if (muscle && !(e.muscles || []).some((m) => m.name === muscle)) return false;
-      if (equip && !(e.equipment || []).some((eq) => eq.name === equip)) return false;
-      if (level && e.level !== level) return false;
-      if (objective && !(e.objectives || []).includes(objective)) return false;
-      return true;
-    });
+    let list = exercises.filter((e) =>
+      matchesFilters(e, {
+        search,
+        category: effectiveCategory,
+        pattern: effectivePattern,
+        muscle: effectiveMuscle,
+        equip: effectiveEquip,
+        level: effectiveLevel,
+        objective: effectiveObjective,
+      })
+    );
 
     list = [...list];
     switch (sortKey) {
@@ -131,7 +201,28 @@ export default function HomePage() {
         break;
     }
     return list;
-  }, [exercises, search, category, pattern, muscle, equip, level, objective, sortKey]);
+  }, [
+    exercises,
+    search,
+    effectiveCategory,
+    effectivePattern,
+    effectiveMuscle,
+    effectiveEquip,
+    effectiveLevel,
+    effectiveObjective,
+    sortKey,
+  ]);
+
+  // Pequeño "pulso" visual en el contador cada vez que cambia el número de
+  // resultados, para que se note que el filtrado ha ocurrido aunque no haya
+  // botón de "Aplicar" — el filtrado sigue siendo instantáneo, solo lo hacemos
+  // más perceptible.
+  const [pulse, setPulse] = useState(false);
+  useEffect(() => {
+    setPulse(true);
+    const t = setTimeout(() => setPulse(false), 350);
+    return () => clearTimeout(t);
+  }, [filtered.length]);
 
   function openExercise(ex) {
     setModal({ type: "exercise", data: ex });
@@ -189,14 +280,14 @@ export default function HomePage() {
               <label>Buscar</label>
               <input
                 type="text"
-                placeholder="Nombre del ejercicio…"
+                placeholder="Nombre, músculo, equipamiento, objetivo…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
             <div className="filter-group">
               <label>Tipo</label>
-              <select value={category} onChange={(e) => setCategory(e.target.value)}>
+              <select value={effectiveCategory} onChange={(e) => setCategory(e.target.value)}>
                 <option value="">Todos</option>
                 {categoryOptions.map((c) => (
                   <option key={c} value={c}>
@@ -207,7 +298,7 @@ export default function HomePage() {
             </div>
             <div className="filter-group">
               <label>Patrón de movimiento</label>
-              <select value={pattern} onChange={(e) => setPattern(e.target.value)}>
+              <select value={effectivePattern} onChange={(e) => setPattern(e.target.value)}>
                 <option value="">Todos</option>
                 {patternOptions.map((p) => (
                   <option key={p} value={p}>
@@ -218,7 +309,7 @@ export default function HomePage() {
             </div>
             <div className="filter-group">
               <label>Grupo muscular</label>
-              <select value={muscle} onChange={(e) => setMuscle(e.target.value)}>
+              <select value={effectiveMuscle} onChange={(e) => setMuscle(e.target.value)}>
                 <option value="">Todos</option>
                 {muscleOptions.map((m) => (
                   <option key={m} value={m}>
@@ -229,7 +320,7 @@ export default function HomePage() {
             </div>
             <div className="filter-group">
               <label>Equipamiento</label>
-              <select value={equip} onChange={(e) => setEquip(e.target.value)}>
+              <select value={effectiveEquip} onChange={(e) => setEquip(e.target.value)}>
                 <option value="">Todos</option>
                 {equipOptions.map((eq) => (
                   <option key={eq} value={eq}>
@@ -240,18 +331,18 @@ export default function HomePage() {
             </div>
             <div className="filter-group">
               <label>Nivel</label>
-              <select value={level} onChange={(e) => setLevel(e.target.value)}>
+              <select value={effectiveLevel} onChange={(e) => setLevel(e.target.value)}>
                 <option value="">Todos</option>
-                {Object.entries(LEVEL_NAMES).map(([k, v]) => (
+                {levelOptions.map((k) => (
                   <option key={k} value={k}>
-                    {v}
+                    {LEVEL_NAMES[k]}
                   </option>
                 ))}
               </select>
             </div>
             <div className="filter-group">
               <label>Objetivo</label>
-              <select value={objective} onChange={(e) => setObjective(e.target.value)}>
+              <select value={effectiveObjective} onChange={(e) => setObjective(e.target.value)}>
                 <option value="">Todos</option>
                 {objectiveOptions.map((o) => (
                   <option key={o} value={o}>
@@ -261,6 +352,8 @@ export default function HomePage() {
               </select>
             </div>
           </div>
+
+          <p className="live-filter-note">Los resultados se actualizan al instante con cada filtro — no hace falta pulsar nada.</p>
 
           <div className="sort-row">
             <label>Ordenar por</label>
@@ -275,7 +368,7 @@ export default function HomePage() {
             </select>
           </div>
 
-          <div className="counter" style={{ marginBottom: 12 }}>
+          <div className={`counter ${pulse ? "counter-pulse" : ""}`} style={{ marginBottom: 12 }}>
             {filtered.length} de {exercises.length} ejercicios
           </div>
 
