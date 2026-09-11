@@ -22,6 +22,7 @@ const DOC_CATEGORY_NAMES = {
   technique: "Técnica",
   case_study: "Caso práctico",
   nutrition_basics: "Nutrición básica",
+  app_guide: "Guía de la app",
 };
 
 function unique(arr) {
