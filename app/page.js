@@ -23,6 +23,8 @@ const DOC_CATEGORY_NAMES = {
   case_study: "Caso práctico",
   nutrition_basics: "Nutrición básica",
   app_guide: "Guía de la app",
+  exercise_science: "Ciencia del ejercicio",
+  wellness_basics: "Hábitos y bienestar",
 };
 
 function unique(arr) {
