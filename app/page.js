@@ -78,6 +78,8 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState("library");
   const [exercises, setExercises] = useState([]);
   const [documents, setDocuments] = useState([]);
+  const [docSearch, setDocSearch] = useState("");
+  const [docCategory, setDocCategory] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -113,7 +115,15 @@ export default function HomePage() {
       }
 
       setExercises(exRes.data || []);
-      setDocuments(docRes.data || []);
+      // La guía de uso de la app siempre va primera, sea cual sea su fecha de
+      // creación — tiene sentido que sea lo primero que ve alguien nuevo.
+      // El resto de documentos mantiene su orden cronológico entre ellos.
+      const sortedDocs = [...(docRes.data || [])].sort((a, b) => {
+        if (a.category === "app_guide" && b.category !== "app_guide") return -1;
+        if (b.category === "app_guide" && a.category !== "app_guide") return 1;
+        return 0;
+      });
+      setDocuments(sortedDocs);
       setLoading(false);
     }
     loadData();
@@ -224,6 +234,29 @@ export default function HomePage() {
     const t = setTimeout(() => setPulse(false), 350);
     return () => clearTimeout(t);
   }, [filtered.length]);
+
+  // Filtro y búsqueda para la pestaña de documentos formativos.
+  const docCategoryOptions = useMemo(
+    () => unique(documents.map((d) => DOC_CATEGORY_NAMES[d.category] || d.category)),
+    [documents]
+  );
+
+  const filteredDocuments = useMemo(() => {
+    const q = docSearch.trim().toLowerCase();
+    let list = documents.filter((d) => {
+      const catName = DOC_CATEGORY_NAMES[d.category] || d.category;
+      if (docCategory && catName !== docCategory) return false;
+      if (q && !(d.title.toLowerCase().includes(q) || (d.summary || "").toLowerCase().includes(q))) return false;
+      return true;
+    });
+    // El tutorial de la app siempre primero, sea cual sea el filtro/búsqueda activos.
+    list = [...list].sort((a, b) => {
+      if (a.category === "app_guide" && b.category !== "app_guide") return -1;
+      if (b.category === "app_guide" && a.category !== "app_guide") return 1;
+      return 0;
+    });
+    return list;
+  }, [documents, docSearch, docCategory]);
 
   function openExercise(ex) {
     setModal({ type: "exercise", data: ex });
@@ -428,8 +461,33 @@ export default function HomePage() {
             Contenido formativo para aprender a diseñar tus propias rutinas — teoría y aplicación práctica
             sobre esta misma biblioteca.
           </p>
+          <div className="filters" style={{ marginBottom: 18 }}>
+            <div className="filter-group">
+              <label>Buscar</label>
+              <input
+                type="text"
+                placeholder="Título o resumen…"
+                value={docSearch}
+                onChange={(e) => setDocSearch(e.target.value)}
+              />
+            </div>
+            <div className="filter-group">
+              <label>Categoría</label>
+              <select value={docCategory} onChange={(e) => setDocCategory(e.target.value)}>
+                <option value="">Todas</option>
+                {docCategoryOptions.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
           <div className="docs-list">
-            {documents.map((doc) => (
+            {filteredDocuments.length === 0 && (
+              <div className="empty">Ningún documento coincide con esa búsqueda.</div>
+            )}
+            {filteredDocuments.map((doc) => (
               <div className="doc-card" key={doc.id} onClick={() => openDocument(doc)} tabIndex={0}>
                 <div className="doc-card-top">
                   <h3>{doc.title}</h3>
