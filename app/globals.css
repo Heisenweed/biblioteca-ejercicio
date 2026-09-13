@@ -131,6 +131,10 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 .doc-card p { color: var(--text-muted); font-size: 13.5px; line-height: 1.5; margin: 0; }
 .doc-meta { display: flex; gap: 8px; flex-shrink: 0; }
 
+.required-mark { color: var(--danger); font-size: 10px; text-transform: none; letter-spacing: 0; font-weight: 600; }
+.optional-mark { color: var(--text-muted); font-size: 10px; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.session-date { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
 .sessions-locked {
   text-align: center; padding: 60px 20px; color: var(--text-muted);
 }

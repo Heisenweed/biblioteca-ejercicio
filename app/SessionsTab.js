@@ -9,6 +9,11 @@ function unique(arr) {
   return [...new Set(arr)].sort((a, b) => a.localeCompare(b, "es"));
 }
 
+function formatDate(iso) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
+}
+
 let tempIdCounter = 0;
 function newTempId() {
   tempIdCounter += 1;
@@ -287,6 +292,7 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
       <div className="sessions-detail">
         <button className="account-btn" onClick={() => setView("list")}>← Volver a mis sesiones</button>
         <h2 className="session-detail-title">{detailRoutine.name}</h2>
+        <div className="session-date">Creada el {formatDate(detailRoutine.created_at)}</div>
         {detailRoutine.target_duration_minutes && (
           <p className="docs-intro">Duración prevista: {detailRoutine.target_duration_minutes} min</p>
         )}
@@ -357,6 +363,7 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
                 {(r.routine_exercises || []).length} ejercicios
                 {r.target_duration_minutes ? ` · ~${r.target_duration_minutes} min previstos` : ""}
               </p>
+              <div className="session-date">Creada el {formatDate(r.created_at)}</div>
             </div>
           ))}
         </div>
@@ -374,11 +381,11 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
 
       <div className="filters" style={{ marginTop: 14 }}>
         <div className="filter-group">
-          <label>Nombre de la sesión</label>
+          <label>Nombre de la sesión <span className="required-mark">* obligatorio</span></label>
           <input type="text" value={builderName} onChange={(e) => setBuilderName(e.target.value)} placeholder="Torso lunes" />
         </div>
         <div className="filter-group">
-          <label>Duración disponible (min)</label>
+          <label>Duración disponible (min) <span className="optional-mark">(opcional)</span></label>
           <input type="number" value={targetDuration} onChange={(e) => setTargetDuration(e.target.value)} placeholder="45" />
         </div>
       </div>
