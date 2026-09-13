@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { marked } from "marked";
 import { supabase } from "../lib/supabaseClient";
+import { useAuth } from "../lib/AuthContext";
 
 const LEVEL_NAMES = { beginner: "Principiante", intermediate: "Intermedio", advanced: "Avanzado" };
 const LEVEL_CLASS = { beginner: "beginner", intermediate: "intermediate", advanced: "advanced" };
@@ -77,6 +78,8 @@ function matchesFilters(e, f) {
 }
 
 export default function HomePage() {
+  const { user, authLoading, signInWithPassword, signUpWithPassword, signInWithGoogle, signOut } = useAuth();
+
   const [activeTab, setActiveTab] = useState("library");
   const [exercises, setExercises] = useState([]);
   const [documents, setDocuments] = useState([]);
@@ -84,6 +87,10 @@ export default function HomePage() {
   const [docCategory, setDocCategory] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [favorites, setFavorites] = useState(new Set());
+  const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
@@ -130,6 +137,60 @@ export default function HomePage() {
     }
     loadData();
   }, []);
+
+  // Carga los favoritos del usuario en cuanto inicia sesión, y los vacía al
+  // cerrarla. Cada usuario solo puede ver los suyos (política de seguridad
+  // ya aplicada en la base de datos).
+  useEffect(() => {
+    if (!user) {
+      setFavorites(new Set());
+      setShowOnlyFavorites(false);
+      return;
+    }
+    supabase
+      .from("user_favorites")
+      .select("exercise_id")
+      .eq("user_id", user.id)
+      .then(({ data, error }) => {
+        if (!error && data) {
+          setFavorites(new Set(data.map((f) => f.exercise_id)));
+        }
+      });
+  }, [user]);
+
+  async function toggleFavorite(exerciseId) {
+    if (!user) {
+      setAuthModalOpen(true);
+      return;
+    }
+    const isFav = favorites.has(exerciseId);
+    // Actualización optimista: se refleja al instante, y se revierte si algo falla.
+    setFavorites((prev) => {
+      const next = new Set(prev);
+      if (isFav) next.delete(exerciseId);
+      else next.add(exerciseId);
+      return next;
+    });
+    if (isFav) {
+      const { error } = await supabase
+        .from("user_favorites")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("exercise_id", exerciseId);
+      if (error) setFavorites((prev) => new Set(prev).add(exerciseId));
+    } else {
+      const { error } = await supabase
+        .from("user_favorites")
+        .insert({ user_id: user.id, exercise_id: exerciseId });
+      if (error) {
+        setFavorites((prev) => {
+          const next = new Set(prev);
+          next.delete(exerciseId);
+          return next;
+        });
+      }
+    }
+  }
 
   // Cada desplegable calcula sus propias opciones aplicando TODOS los demás
   // filtros activos excepto el suyo propio. Resultado: si seleccionas
@@ -190,6 +251,10 @@ export default function HomePage() {
       })
     );
 
+    if (showOnlyFavorites) {
+      list = list.filter((e) => favorites.has(e.id));
+    }
+
     list = [...list];
     switch (sortKey) {
       case "alfa-az":
@@ -224,6 +289,8 @@ export default function HomePage() {
     effectiveLevel,
     effectiveObjective,
     sortKey,
+    showOnlyFavorites,
+    favorites,
   ]);
 
   // Pequeño "pulso" visual en el contador cada vez que cambia el número de
@@ -272,6 +339,19 @@ export default function HomePage() {
 
   return (
     <div className="wrap">
+      <div className="account-bar">
+        {!authLoading && (user ? (
+          <>
+            <span className="account-email">{user.email}</span>
+            <button className="account-btn" onClick={() => signOut()}>Cerrar sesión</button>
+          </>
+        ) : (
+          <button className="account-btn account-btn-primary" onClick={() => setAuthModalOpen(true)}>
+            Iniciar sesión
+          </button>
+        ))}
+      </div>
+
       <header className="hero">
         <div className="eyebrow">Biblioteca conectada a base de datos real</div>
         <h1>Biblioteca de ejercicios</h1>
@@ -402,6 +482,20 @@ export default function HomePage() {
               <option value="equipo-asc">Equipamiento necesario (menos → más)</option>
               <option value="musculos-desc">Nº de músculos implicados (más → menos)</option>
             </select>
+            <label className="fav-toggle">
+              <input
+                type="checkbox"
+                checked={showOnlyFavorites}
+                onChange={(e) => {
+                  if (!user) {
+                    setAuthModalOpen(true);
+                    return;
+                  }
+                  setShowOnlyFavorites(e.target.checked);
+                }}
+              />
+              ★ Solo favoritos
+            </label>
           </div>
 
           <div className={`counter ${pulse ? "counter-pulse" : ""}`} style={{ marginBottom: 12 }}>
@@ -422,7 +516,19 @@ export default function HomePage() {
                 <div className="card" key={ex.id} onClick={() => openExercise(ex)} tabIndex={0}>
                   <div className="card-top">
                     <h3>{ex.name}</h3>
-                    <span className={`badge ${LEVEL_CLASS[ex.level]}`}>{LEVEL_NAMES[ex.level]}</span>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+                      <button
+                        className={`fav-star ${favorites.has(ex.id) ? "active" : ""}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFavorite(ex.id);
+                        }}
+                        aria-label="Marcar como favorito"
+                      >
+                        {favorites.has(ex.id) ? "★" : "☆"}
+                      </button>
+                      <span className={`badge ${LEVEL_CLASS[ex.level]}`}>{LEVEL_NAMES[ex.level]}</span>
+                    </div>
                   </div>
                   <div className="tags-row" style={{ marginBottom: 10 }}>
                     <span className={`badge-category ${ex.category?.startsWith("stretch") ? "stretch" : ""}`}>
@@ -509,19 +615,40 @@ export default function HomePage() {
 
       {modal && (
         <div className="modal-backdrop open" onClick={(e) => e.target === e.currentTarget && closeModal()}>
-          {modal.type === "exercise" && <ExerciseModal ex={modal.data} onClose={closeModal} />}
+          {modal.type === "exercise" && (
+            <ExerciseModal
+              ex={modal.data}
+              onClose={closeModal}
+              isFavorite={favorites.has(modal.data.id)}
+              onToggleFavorite={() => toggleFavorite(modal.data.id)}
+            />
+          )}
           {modal.type === "document" && <DocumentModal doc={modal.data} onClose={closeModal} />}
+        </div>
+      )}
+
+      {authModalOpen && (
+        <div className="modal-backdrop open" onClick={(e) => e.target === e.currentTarget && setAuthModalOpen(false)}>
+          <AuthModal
+            onClose={() => setAuthModalOpen(false)}
+            signInWithPassword={signInWithPassword}
+            signUpWithPassword={signUpWithPassword}
+            signInWithGoogle={signInWithGoogle}
+          />
         </div>
       )}
     </div>
   );
 }
 
-function ExerciseModal({ ex, onClose }) {
+function ExerciseModal({ ex, onClose, isFavorite, onToggleFavorite }) {
   return (
     <div className="modal">
       <button className="close-btn" onClick={onClose} aria-label="Cerrar">
         ✕
+      </button>
+      <button className={`fav-star fav-star-modal ${isFavorite ? "active" : ""}`} onClick={onToggleFavorite} aria-label="Marcar como favorito">
+        {isFavorite ? "★ En favoritos" : "☆ Añadir a favoritos"}
       </button>
       <h2>{ex.name}</h2>
       <div className="modal-meta">
@@ -593,6 +720,87 @@ function DocumentModal({ doc, onClose }) {
         </span>
       </div>
       <div className="reader-content" dangerouslySetInnerHTML={{ __html: html }} />
+    </div>
+  );
+}
+
+function AuthModal({ onClose, signInWithPassword, signUpWithPassword, signInWithGoogle }) {
+  const [mode, setMode] = useState("login"); // 'login' | 'signup'
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState(null);
+  const [infoMsg, setInfoMsg] = useState(null);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setErrorMsg(null);
+    setInfoMsg(null);
+    setSubmitting(true);
+    const { error } =
+      mode === "login" ? await signInWithPassword(email, password) : await signUpWithPassword(email, password);
+    setSubmitting(false);
+    if (error) {
+      setErrorMsg(error.message);
+      return;
+    }
+    if (mode === "signup") {
+      setInfoMsg("Cuenta creada. Revisa tu email para confirmar la cuenta antes de iniciar sesión.");
+      return;
+    }
+    onClose();
+  }
+
+  return (
+    <div className="modal auth-modal">
+      <button className="close-btn" onClick={onClose} aria-label="Cerrar">
+        ✕
+      </button>
+      <h2>{mode === "login" ? "Iniciar sesión" : "Crear cuenta"}</h2>
+      <p className="auth-subtitle">
+        {mode === "login"
+          ? "Necesario para guardar favoritos y diseñar tus propias sesiones."
+          : "Es gratis — la suscripción de pago todavía no está activa."}
+      </p>
+
+      <button type="button" className="google-btn" onClick={() => signInWithGoogle()}>
+        <span className="google-icon" aria-hidden="true">G</span>
+        Continuar con Google
+      </button>
+
+      <div className="auth-divider"><span>o con tu email</span></div>
+
+      <form onSubmit={handleSubmit} className="auth-form">
+        <label>
+          Email
+          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+        </label>
+        <label>
+          Contraseña
+          <input
+            type="password"
+            required
+            minLength={6}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </label>
+
+        {errorMsg && <p className="auth-error">{errorMsg}</p>}
+        {infoMsg && <p className="auth-info">{infoMsg}</p>}
+
+        <button type="submit" className="account-btn account-btn-primary" disabled={submitting} style={{ width: "100%" }}>
+          {submitting ? "Un momento…" : mode === "login" ? "Entrar" : "Crear cuenta"}
+        </button>
+      </form>
+
+      <p className="auth-switch">
+        {mode === "login" ? (
+          <>¿No tienes cuenta? <button type="button" onClick={() => setMode("signup")}>Crear una</button></>
+        ) : (
+          <>¿Ya tienes cuenta? <button type="button" onClick={() => setMode("login")}>Iniciar sesión</button></>
+        )}
+      </p>
     </div>
   );
 }

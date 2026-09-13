@@ -1,4 +1,5 @@
 import "./globals.css";
+import { AuthProvider } from "../lib/AuthContext";
 
 export const metadata = {
   title: "Biblioteca de ejercicios",
@@ -15,7 +16,10 @@ export default function RootLayout({ children }) {
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }
+

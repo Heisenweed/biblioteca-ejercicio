@@ -168,17 +168,80 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 }
 .reader-content h2:first-of-type { border-top: none; padding-top: 0; }
 .reader-content h3 { font-family: 'Space Grotesk', sans-serif; font-size: 16px; margin: 18px 0 8px; }
-.reader-content p { color: var(--text); margin: 0 0 14px; }
+.reader-content p { color: var(--text); margin: 0 0 14px; text-align: justify; hyphens: auto; }
 .reader-content em { color: var(--text-muted); }
 .reader-content strong { color: var(--accent); font-weight: 600; }
 .reader-content ul, .reader-content ol { margin: 0 0 14px; padding-left: 22px; color: var(--text); }
-.reader-content li { margin-bottom: 6px; }
+.reader-content li { margin-bottom: 6px; text-align: justify; hyphens: auto; }
 .reader-content hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 .reader-content table { width: 100%; border-collapse: collapse; margin: 0 0 16px; font-size: 13.5px; }
 .reader-content th, .reader-content td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; }
 .reader-content th {
   background: var(--surface-alt); font-family: 'IBM Plex Mono', monospace; font-size: 11px;
   text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted);
+}
+
+.account-bar {
+  display: flex; justify-content: flex-end; align-items: center; gap: 10px;
+  padding: 14px 0 0; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px;
+}
+.account-email { color: var(--text-muted); }
+.account-btn {
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+  padding: 7px 14px; border-radius: 6px; font-family: 'IBM Plex Mono', monospace;
+  font-size: 12.5px; cursor: pointer;
+}
+.account-btn:hover { border-color: var(--text-muted); }
+.account-btn-primary { background: var(--accent); color: #14161a; border-color: var(--accent); font-weight: 600; }
+.account-btn-primary:hover { background: var(--accent-dim); border-color: var(--accent-dim); }
+
+.fav-toggle {
+  display: flex; align-items: center; gap: 6px; font-family: 'IBM Plex Mono', monospace;
+  font-size: 12.5px; color: var(--text-muted); cursor: pointer; white-space: nowrap; margin-left: 4px;
+}
+.fav-star {
+  background: none; border: none; color: var(--text-muted); font-size: 20px; line-height: 1;
+  cursor: pointer; padding: 0 2px;
+}
+.fav-star.active { color: var(--accent); }
+.fav-star-modal {
+  float: right; margin-right: 40px; font-size: 13px; font-family: 'IBM Plex Mono', monospace;
+  border: 1px solid var(--border); border-radius: 100px; padding: 5px 12px; color: var(--text-muted);
+}
+.fav-star-modal.active { color: var(--accent); border-color: var(--accent); }
+
+.auth-modal { max-width: 380px; }
+.auth-subtitle { color: var(--text-muted); font-size: 13px; margin: 0 0 20px; }
+.google-btn {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
+  background: #fff; color: #1f1f1f; border: none; border-radius: 6px; padding: 11px;
+  font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 18px;
+}
+.google-btn:hover { background: #f1f1f1; }
+.google-icon {
+  width: 18px; height: 18px; border-radius: 50%; background: #4285f4; color: #fff;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
+}
+.auth-divider {
+  display: flex; align-items: center; text-align: center; color: var(--text-muted);
+  font-family: 'IBM Plex Mono', monospace; font-size: 11px; margin: 0 0 18px;
+}
+.auth-divider::before, .auth-divider::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+.auth-divider span { padding: 0 10px; }
+.auth-form { display: flex; flex-direction: column; gap: 14px; }
+.auth-form label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-muted); }
+.auth-form input {
+  background: var(--surface-alt); border: 1px solid var(--border); color: var(--text);
+  padding: 10px 12px; border-radius: 6px; font-family: 'Inter', sans-serif; font-size: 14px;
+}
+.auth-error { color: var(--danger); font-size: 13px; margin: 0; }
+.auth-info { color: var(--accent); font-size: 13px; margin: 0; }
+.auth-switch {
+  text-align: center; margin: 18px 0 0; font-size: 13px; color: var(--text-muted);
+}
+.auth-switch button {
+  background: none; border: none; color: var(--accent); cursor: pointer; font-size: 13px;
+  text-decoration: underline; padding: 0;
 }
 
 .loading-state, .error-state {
