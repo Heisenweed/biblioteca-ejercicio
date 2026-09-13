@@ -416,21 +416,22 @@ export default function HomePage() {
       </div>
 
       <header className="hero">
-        <div className="eyebrow">Biblioteca conectada a base de datos real</div>
+        <div className="eyebrow">Tu biblioteca personal de entrenamiento</div>
         <h1>Biblioteca de ejercicios</h1>
         <p>
-          Filtra ejercicios por músculo, patrón de movimiento, equipamiento, nivel y objetivo, o lee los
-          documentos formativos para aprender a diseñar tus propias rutinas.
+          Filtra ejercicios por músculo, patrón de movimiento, equipamiento, nivel y objetivo — y no te quedes solo
+          en la teoría: diseña, guarda y sigue tus propias sesiones de entrenamiento aquí mismo, con los artículos
+          de valor para aprender el porqué de cada decisión.
         </p>
-        {!loading && !error && (
-          <div className="counter">
-            {exercises.length} ejercicios · {documents.length} documentos cargados
-          </div>
-        )}
         {tutorialDoc && (
           <button className="tutorial-cta" onClick={() => openDocument(tutorialDoc)}>
             📖 ¿Primera vez aquí? Mira la guía rápida de la app
           </button>
+        )}
+        {!loading && !error && (
+          <div className="counter">
+            {exercises.length} ejercicios · {documents.length} documentos cargados
+          </div>
         )}
         <p className="health-disclaimer">
           Antes de entrenar por tu cuenta, es importante conocer tu estado de salud. Tienes disponible un{" "}
