@@ -114,6 +114,10 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
     });
   }, [exercises, fSearch, fPattern, fMuscle, fEquip, fLevel, fObjective]);
 
+  const hasActivePickerFilter = Boolean(
+    fSearch.trim() || fPattern || fMuscle || fEquip || fLevel || fObjective
+  );
+
   function startNewSession() {
     setBuilderName("");
     setTargetDuration("");
@@ -210,45 +214,43 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
     setSaving(true);
     setSaveError(null);
 
-    const { data: routine, error: routineError } = await supabase
-      .from("routines")
-      .insert({
-        user_id: user.id,
-        name: builderName.trim(),
-        target_duration_minutes: targetDuration ? Number(targetDuration) : null,
-        design_filters: { patterns: fPattern, muscle: fMuscle, equipment: fEquip, level: fLevel, objective: fObjective },
-      })
-      .select()
-      .single();
+    try {
+      const { data: routine, error: routineError } = await supabase
+        .from("routines")
+        .insert({
+          user_id: user.id,
+          name: builderName.trim(),
+          target_duration_minutes: targetDuration ? Number(targetDuration) : null,
+          design_filters: { patterns: fPattern, muscle: fMuscle, equipment: fEquip, level: fLevel, objective: fObjective },
+        })
+        .select()
+        .single();
 
-    if (routineError) {
-      setSaveError(routineError.message);
+      if (routineError) throw routineError;
+
+      const rows = items.map((item, index) => ({
+        routine_id: routine.id,
+        exercise_id: item.exercise.id,
+        order_index: index,
+        sets: item.sets ? Number(item.sets) : null,
+        reps: item.mode === "reps" ? item.reps : null,
+        duration_seconds: item.mode === "time" ? Number(item.duration_seconds) : null,
+        rest_seconds: item.rest_seconds ? Number(item.rest_seconds) : null,
+        load_note: item.load_note || null,
+        notes: item.notes || null,
+        superset_group: item.superset_group,
+      }));
+
+      const { error: itemsError } = await supabase.from("routine_exercises").insert(rows);
+      if (itemsError) throw itemsError;
+
       setSaving(false);
-      return;
+
+      setView("list");
+    } catch (err) {
+      setSaveError(err?.message || "No se pudo guardar la sesión. Inténtalo de nuevo.");
+      setSaving(false);
     }
-
-    const rows = items.map((item, index) => ({
-      routine_id: routine.id,
-      exercise_id: item.exercise.id,
-      order_index: index,
-      sets: item.sets ? Number(item.sets) : null,
-      reps: item.mode === "reps" ? item.reps : null,
-      duration_seconds: item.mode === "time" ? Number(item.duration_seconds) : null,
-      rest_seconds: item.rest_seconds ? Number(item.rest_seconds) : null,
-      load_note: item.load_note || null,
-      notes: item.notes || null,
-      superset_group: item.superset_group,
-    }));
-
-    const { error: itemsError } = await supabase.from("routine_exercises").insert(rows);
-    setSaving(false);
-
-    if (itemsError) {
-      setSaveError(itemsError.message);
-      return;
-    }
-
-    setView("list");
   }
 
   async function deleteRoutine(id) {
@@ -425,13 +427,19 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
       </div>
 
       <div className="picker-grid">
-        {filteredExercises.slice(0, 24).map((ex) => (
-          <div className="picker-card" key={ex.id}>
-            <span>{ex.name}</span>
-            <button className="account-btn account-btn-primary" onClick={() => addExercise(ex)}>+ Añadir</button>
-          </div>
-        ))}
-        {filteredExercises.length === 0 && <div className="empty">Ningún ejercicio coincide con estos filtros.</div>}
+        {!hasActivePickerFilter && (
+          <div className="empty">Escribe una búsqueda o elige un filtro arriba para ver ejercicios aquí.</div>
+        )}
+        {hasActivePickerFilter &&
+          filteredExercises.slice(0, 30).map((ex) => (
+            <div className="picker-card" key={ex.id}>
+              <span>{ex.name}</span>
+              <button className="account-btn account-btn-primary" onClick={() => addExercise(ex)}>+ Añadir</button>
+            </div>
+          ))}
+        {hasActivePickerFilter && filteredExercises.length === 0 && (
+          <div className="empty">Ningún ejercicio coincide con estos filtros.</div>
+        )}
       </div>
 
       <div className="section-label" style={{ marginTop: 24 }}>
@@ -536,6 +544,12 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
       </div>
 
       {saveError && <p className="auth-error">{saveError}</p>}
+      {!saveError && !builderName.trim() && (
+        <p className="auth-info">Ponle un nombre a la sesión (arriba del todo) para poder guardarla.</p>
+      )}
+      {!saveError && builderName.trim() && items.length === 0 && (
+        <p className="auth-info">Añade al menos un ejercicio antes de guardar.</p>
+      )}
 
       <button
         className="account-btn account-btn-primary"

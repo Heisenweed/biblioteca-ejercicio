@@ -70,6 +70,7 @@ function matchesFilters(e, f) {
   const catName = CATEGORY_NAMES[e.category] || e.category;
   if (f.search && !matchesSearch(e, f.search)) return false;
   if (f.category && catName !== f.category) return false;
+  if (f.bodyRegion && !(e.body_regions || []).includes(f.bodyRegion)) return false;
   if (f.pattern && !(e.patterns || []).includes(f.pattern)) return false;
   if (f.muscle && !(e.muscles || []).some((m) => m.name === f.muscle)) return false;
   if (f.equip && !(e.equipment || []).some((eq) => eq.name === f.equip)) return false;
@@ -90,11 +91,14 @@ export default function HomePage() {
   const [error, setError] = useState(null);
 
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [profile, setProfile] = useState(null);
   const [favorites, setFavorites] = useState(new Set());
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
+  const [bodyRegion, setBodyRegion] = useState("");
   const [pattern, setPattern] = useState("");
   const [muscle, setMuscle] = useState("");
   const [equip, setEquip] = useState("");
@@ -159,6 +163,29 @@ export default function HomePage() {
       });
   }, [user]);
 
+  useEffect(() => {
+    if (!user) {
+      setProfile(null);
+      return;
+    }
+    supabase
+      .from("profiles")
+      .select("full_name, age, weight_kg, height_cm")
+      .eq("id", user.id)
+      .single()
+      .then(({ data, error }) => {
+        if (!error) setProfile(data);
+      });
+  }, [user]);
+
+  async function saveProfile(updates) {
+    const { error } = await supabase.from("profiles").update(updates).eq("id", user.id);
+    if (!error) {
+      setProfile((prev) => ({ ...prev, ...updates }));
+    }
+    return error;
+  }
+
   async function toggleFavorite(exerciseId) {
     if (!user) {
       setAuthModalOpen(true);
@@ -199,40 +226,46 @@ export default function HomePage() {
   // "Deltoides" porque ningún ejercicio real cumple ambas condiciones a la
   // vez. Funciona en cualquier orden en que actives los filtros.
   const categoryOptions = useMemo(() => {
-    const subset = exercises.filter((e) => matchesFilters(e, { search, pattern, muscle, equip, level, objective }));
+    const subset = exercises.filter((e) => matchesFilters(e, { search, bodyRegion, pattern, muscle, equip, level, objective }));
     return unique(subset.map((e) => CATEGORY_NAMES[e.category] || e.category));
-  }, [exercises, search, pattern, muscle, equip, level, objective]);
+  }, [exercises, search, bodyRegion, pattern, muscle, equip, level, objective]);
+
+  const bodyRegionOptions = useMemo(() => {
+    const subset = exercises.filter((e) => matchesFilters(e, { search, category, pattern, muscle, equip, level, objective }));
+    return unique(subset.flatMap((e) => e.body_regions || []));
+  }, [exercises, search, category, pattern, muscle, equip, level, objective]);
 
   const patternOptions = useMemo(() => {
-    const subset = exercises.filter((e) => matchesFilters(e, { search, category, muscle, equip, level, objective }));
+    const subset = exercises.filter((e) => matchesFilters(e, { search, category, bodyRegion, muscle, equip, level, objective }));
     return unique(subset.flatMap((e) => e.patterns || []));
-  }, [exercises, search, category, muscle, equip, level, objective]);
+  }, [exercises, search, category, bodyRegion, muscle, equip, level, objective]);
 
   const muscleOptions = useMemo(() => {
-    const subset = exercises.filter((e) => matchesFilters(e, { search, category, pattern, equip, level, objective }));
+    const subset = exercises.filter((e) => matchesFilters(e, { search, category, bodyRegion, pattern, equip, level, objective }));
     return unique(subset.flatMap((e) => (e.muscles || []).map((m) => m.name)));
-  }, [exercises, search, category, pattern, equip, level, objective]);
+  }, [exercises, search, category, bodyRegion, pattern, equip, level, objective]);
 
   const equipOptions = useMemo(() => {
-    const subset = exercises.filter((e) => matchesFilters(e, { search, category, pattern, muscle, level, objective }));
+    const subset = exercises.filter((e) => matchesFilters(e, { search, category, bodyRegion, pattern, muscle, level, objective }));
     return unique(subset.flatMap((e) => (e.equipment || []).map((eq) => eq.name)));
-  }, [exercises, search, category, pattern, muscle, level, objective]);
+  }, [exercises, search, category, bodyRegion, pattern, muscle, level, objective]);
 
   const levelOptions = useMemo(() => {
-    const subset = exercises.filter((e) => matchesFilters(e, { search, category, pattern, muscle, equip, objective }));
+    const subset = exercises.filter((e) => matchesFilters(e, { search, category, bodyRegion, pattern, muscle, equip, objective }));
     return unique(subset.map((e) => e.level)).sort((a, b) => LEVEL_RANK[a] - LEVEL_RANK[b]);
-  }, [exercises, search, category, pattern, muscle, equip, objective]);
+  }, [exercises, search, category, bodyRegion, pattern, muscle, equip, objective]);
 
   const objectiveOptions = useMemo(() => {
-    const subset = exercises.filter((e) => matchesFilters(e, { search, category, pattern, muscle, equip, level }));
+    const subset = exercises.filter((e) => matchesFilters(e, { search, category, bodyRegion, pattern, muscle, equip, level }));
     return unique(subset.flatMap((e) => e.objectives || []));
-  }, [exercises, search, category, pattern, muscle, equip, level]);
+  }, [exercises, search, category, bodyRegion, pattern, muscle, equip, level]);
 
   // Si un filtro ya seleccionado deja de ser una opción válida (porque otro
   // filtro cambió y ya no hay ningún ejercicio que cumpla ambos), se trata
   // como "sin seleccionar" tanto visualmente como en el resultado — sin
   // necesidad de que el usuario lo quite a mano.
   const effectiveCategory = categoryOptions.includes(category) ? category : "";
+  const effectiveBodyRegion = bodyRegionOptions.includes(bodyRegion) ? bodyRegion : "";
   const effectivePattern = patternOptions.includes(pattern) ? pattern : "";
   const effectiveMuscle = muscleOptions.includes(muscle) ? muscle : "";
   const effectiveEquip = equipOptions.includes(equip) ? equip : "";
@@ -244,6 +277,7 @@ export default function HomePage() {
       matchesFilters(e, {
         search,
         category: effectiveCategory,
+        bodyRegion: effectiveBodyRegion,
         pattern: effectivePattern,
         muscle: effectiveMuscle,
         equip: effectiveEquip,
@@ -284,6 +318,7 @@ export default function HomePage() {
     exercises,
     search,
     effectiveCategory,
+    effectiveBodyRegion,
     effectivePattern,
     effectiveMuscle,
     effectiveEquip,
@@ -343,7 +378,8 @@ export default function HomePage() {
       <div className="account-bar">
         {!authLoading && (user ? (
           <>
-            <span className="account-email">{user.email}</span>
+            <span className="account-email">{profile?.full_name || user.email}</span>
+            <button className="account-btn" onClick={() => setProfileModalOpen(true)}>Editar perfil</button>
             <button className="account-btn" onClick={() => signOut()}>Cerrar sesión</button>
           </>
         ) : (
@@ -420,12 +456,12 @@ export default function HomePage() {
               </select>
             </div>
             <div className="filter-group">
-              <label>Patrón de movimiento</label>
-              <select value={effectivePattern} onChange={(e) => setPattern(e.target.value)}>
-                <option value="">Todos</option>
-                {patternOptions.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
+              <label>Parte del cuerpo</label>
+              <select value={effectiveBodyRegion} onChange={(e) => setBodyRegion(e.target.value)}>
+                <option value="">Todas</option>
+                {bodyRegionOptions.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
                   </option>
                 ))}
               </select>
@@ -437,6 +473,28 @@ export default function HomePage() {
                 {muscleOptions.map((m) => (
                   <option key={m} value={m}>
                     {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="filter-group">
+              <label>Patrón de movimiento</label>
+              <select value={effectivePattern} onChange={(e) => setPattern(e.target.value)}>
+                <option value="">Todos</option>
+                {patternOptions.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="filter-group">
+              <label>Objetivo</label>
+              <select value={effectiveObjective} onChange={(e) => setObjective(e.target.value)}>
+                <option value="">Todos</option>
+                {objectiveOptions.map((o) => (
+                  <option key={o} value={o}>
+                    {o}
                   </option>
                 ))}
               </select>
@@ -459,17 +517,6 @@ export default function HomePage() {
                 {levelOptions.map((k) => (
                   <option key={k} value={k}>
                     {LEVEL_NAMES[k]}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="filter-group">
-              <label>Objetivo</label>
-              <select value={effectiveObjective} onChange={(e) => setObjective(e.target.value)}>
-                <option value="">Todos</option>
-                {objectiveOptions.map((o) => (
-                  <option key={o} value={o}>
-                    {o}
                   </option>
                 ))}
               </select>
@@ -648,6 +695,12 @@ export default function HomePage() {
           />
         </div>
       )}
+
+      {profileModalOpen && (
+        <div className="modal-backdrop open" onClick={(e) => e.target === e.currentTarget && setProfileModalOpen(false)}>
+          <ProfileModal profile={profile} onClose={() => setProfileModalOpen(false)} onSave={saveProfile} />
+        </div>
+      )}
     </div>
   );
 }
@@ -812,6 +865,71 @@ function AuthModal({ onClose, signInWithPassword, signUpWithPassword, signInWith
           <>¿Ya tienes cuenta? <button type="button" onClick={() => setMode("login")}>Iniciar sesión</button></>
         )}
       </p>
+    </div>
+  );
+}
+
+function ProfileModal({ profile, onClose, onSave }) {
+  const [fullName, setFullName] = useState(profile?.full_name || "");
+  const [age, setAge] = useState(profile?.age ?? "");
+  const [weight, setWeight] = useState(profile?.weight_kg ?? "");
+  const [height, setHeight] = useState(profile?.height_cm ?? "");
+  const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState(null);
+  const [savedOk, setSavedOk] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setSaving(true);
+    setErrorMsg(null);
+    setSavedOk(false);
+    const error = await onSave({
+      full_name: fullName.trim() || null,
+      age: age === "" ? null : Number(age),
+      weight_kg: weight === "" ? null : Number(weight),
+      height_cm: height === "" ? null : Number(height),
+    });
+    setSaving(false);
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setSavedOk(true);
+    }
+  }
+
+  return (
+    <div className="modal auth-modal">
+      <button className="close-btn" onClick={onClose} aria-label="Cerrar">
+        ✕
+      </button>
+      <h2>Editar perfil</h2>
+      <p className="auth-subtitle">Este nombre es lo único que ven otras personas — nunca tu email.</p>
+
+      <form onSubmit={handleSubmit} className="auth-form">
+        <label>
+          Nombre visible
+          <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Cómo quieres que te llamen" />
+        </label>
+        <label>
+          Edad
+          <input type="number" min="0" max="120" value={age} onChange={(e) => setAge(e.target.value)} />
+        </label>
+        <label>
+          Peso (kg)
+          <input type="number" min="0" step="0.1" value={weight} onChange={(e) => setWeight(e.target.value)} />
+        </label>
+        <label>
+          Estatura (cm)
+          <input type="number" min="0" value={height} onChange={(e) => setHeight(e.target.value)} />
+        </label>
+
+        {errorMsg && <p className="auth-error">{errorMsg}</p>}
+        {savedOk && <p className="auth-info">Perfil actualizado.</p>}
+
+        <button type="submit" className="account-btn account-btn-primary" disabled={saving} style={{ width: "100%" }}>
+          {saving ? "Guardando…" : "Guardar cambios"}
+        </button>
+      </form>
     </div>
   );
 }
