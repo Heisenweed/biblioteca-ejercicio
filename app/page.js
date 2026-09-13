@@ -610,6 +610,9 @@ export default function HomePage() {
               const catName = CATEGORY_NAMES[ex.category] || ex.category;
               return (
                 <div className="card" key={ex.id} onClick={() => openExercise(ex)} tabIndex={0}>
+                  {ex.photo_url && (
+                    <img src={ex.photo_url} alt={ex.name} className="card-photo" loading="lazy" />
+                  )}
                   <div className="card-top">
                     <h3>{ex.name}</h3>
                     <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
@@ -776,6 +779,7 @@ function ExerciseModal({ ex, onClose, isFavorite, onToggleFavorite }) {
         {isFavorite ? "★ En favoritos" : "☆ Añadir a favoritos"}
       </button>
       <h2>{ex.name}</h2>
+      {ex.photo_url && <img src={ex.photo_url} alt={ex.name} className="modal-photo" />}
       <div className="modal-meta">
         <span className={`badge ${LEVEL_CLASS[ex.level]}`}>{LEVEL_NAMES[ex.level]}</span>
         <span className={`badge-category ${ex.category?.startsWith("stretch") ? "stretch" : ""}`}>
