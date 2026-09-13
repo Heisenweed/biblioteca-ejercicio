@@ -132,6 +132,29 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 .doc-meta { display: flex; gap: 8px; flex-shrink: 0; }
 
 .completion-history { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 18px; }
+
+@media (max-width: 640px) {
+  .sort-row {
+    flex-wrap: wrap;
+  }
+  .sort-row select {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  .fav-toggle {
+    flex-basis: 100%;
+    margin-left: 0;
+    margin-top: 6px;
+  }
+  .doc-card-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .doc-meta {
+    flex-wrap: wrap;
+  }
+}
+
 .completion-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 13px; border-top: 1px solid var(--border); }
 .completion-row:first-of-type { border-top: none; }
 .completion-row button { font-size: 10px; padding: 3px 8px; }
