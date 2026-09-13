@@ -86,7 +86,7 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
     setRoutinesLoading(true);
     supabase
       .from("routines")
-      .select("*, routine_exercises(*)")
+      .select("*, routine_exercises(*), routine_completions(id, completed_at)")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .then(({ data, error }) => {
@@ -263,6 +263,29 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
     setRoutines((prev) => prev.filter((r) => r.id !== id));
   }
 
+  async function markCompletedToday(routineId) {
+    const { data, error } = await supabase
+      .from("routine_completions")
+      .insert({ routine_id: routineId, user_id: user.id })
+      .select()
+      .single();
+    if (error) return;
+    const updateWith = (r) =>
+      r.id === routineId ? { ...r, routine_completions: [...(r.routine_completions || []), data] } : r;
+    setRoutines((prev) => prev.map(updateWith));
+    setDetailRoutine((prev) => (prev && prev.id === routineId ? updateWith(prev) : prev));
+  }
+
+  async function undoCompletion(completionId, routineId) {
+    await supabase.from("routine_completions").delete().eq("id", completionId);
+    const updateWith = (r) =>
+      r.id === routineId
+        ? { ...r, routine_completions: (r.routine_completions || []).filter((c) => c.id !== completionId) }
+        : r;
+    setRoutines((prev) => prev.map(updateWith));
+    setDetailRoutine((prev) => (prev && prev.id === routineId ? updateWith(prev) : prev));
+  }
+
   function openDetail(routine) {
     setDetailRoutine(routine);
     setView("detail");
@@ -296,6 +319,30 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
         {detailRoutine.target_duration_minutes && (
           <p className="docs-intro">Duración prevista: {detailRoutine.target_duration_minutes} min</p>
         )}
+
+        <button
+          className="account-btn account-btn-primary"
+          style={{ margin: "14px 0" }}
+          onClick={() => markCompletedToday(detailRoutine.id)}
+        >
+          ✓ Marcar como hecha hoy
+        </button>
+
+        {(detailRoutine.routine_completions || []).length > 0 && (
+          <div className="completion-history">
+            <div className="section-label" style={{ marginTop: 0 }}>Historial de veces realizada</div>
+            {[...detailRoutine.routine_completions]
+              .sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at))
+              .map((c) => (
+                <div className="completion-row" key={c.id}>
+                  <span>{formatDate(c.completed_at)}</span>
+                  <button className="account-btn" onClick={() => undoCompletion(c.id, detailRoutine.id)}>Deshacer</button>
+                </div>
+              ))}
+          </div>
+        )}
+
+        <div className="section-label">Ejercicios de la sesión</div>
         <div className="session-detail-list">
           {renderGroups.map((g, i) =>
             g.type === "single" ? (
@@ -363,7 +410,16 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
                 {(r.routine_exercises || []).length} ejercicios
                 {r.target_duration_minutes ? ` · ~${r.target_duration_minutes} min previstos` : ""}
               </p>
-              <div className="session-date">Creada el {formatDate(r.created_at)}</div>
+              <div className="session-date">
+                Creada el {formatDate(r.created_at)}
+                {(r.routine_completions || []).length > 0 ? (
+                  <> · ✓ Última vez: {formatDate(
+                    [...r.routine_completions].sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at))[0].completed_at
+                  )} · hecha {r.routine_completions.length} {r.routine_completions.length === 1 ? "vez" : "veces"}</>
+                ) : (
+                  <> · aún no realizada</>
+                )}
+              </div>
             </div>
           ))}
         </div>
