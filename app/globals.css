@@ -160,7 +160,7 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 .completion-row button { font-size: 10px; padding: 3px 8px; }
 
 .card-photo {
-  width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 6px; margin-bottom: 12px;
+  width: 100%; aspect-ratio: 4/3; object-fit: contain; border-radius: 6px; margin-bottom: 12px;
   background: var(--surface-alt);
 }
 .modal-photo {
