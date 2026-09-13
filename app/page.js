@@ -93,6 +93,8 @@ export default function HomePage() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [profile, setProfile] = useState(null);
+  const [healthModalOpen, setHealthModalOpen] = useState(false);
+  const [healthScreening, setHealthScreening] = useState(null); // null = aún no cargado/hecho
   const [favorites, setFavorites] = useState(new Set());
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
 
@@ -184,6 +186,30 @@ export default function HomePage() {
       setProfile((prev) => ({ ...prev, ...updates }));
     }
     return error;
+  }
+
+  useEffect(() => {
+    if (!user) {
+      setHealthScreening(null);
+      return;
+    }
+    supabase
+      .from("health_screening")
+      .select("answers, has_flag, completed_at")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => setHealthScreening(data));
+  }, [user]);
+
+  async function saveHealthScreening(answers) {
+    const hasFlag = Object.values(answers).some(Boolean);
+    const { error } = await supabase
+      .from("health_screening")
+      .upsert({ user_id: user.id, answers, has_flag: hasFlag, completed_at: new Date().toISOString() });
+    if (!error) {
+      setHealthScreening({ answers, has_flag: hasFlag, completed_at: new Date().toISOString() });
+    }
+    return { error, hasFlag };
   }
 
   async function toggleFavorite(exerciseId) {
@@ -379,7 +405,10 @@ export default function HomePage() {
         {!authLoading && (user ? (
           <>
             <span className="account-email">{profile?.full_name || user.email}</span>
-            <button className="account-btn" onClick={() => setProfileModalOpen(true)}>Editar perfil</button>
+            <button className="account-btn" onClick={() => setProfileModalOpen(true)}>
+              Editar perfil
+              {healthScreening?.has_flag && <span className="health-flag-dot" title="Recomendación de salud pendiente de revisar" />}
+            </button>
             <button className="account-btn" onClick={() => signOut()}>Cerrar sesión</button>
           </>
         ) : (
@@ -401,6 +430,16 @@ export default function HomePage() {
             {exercises.length} ejercicios · {documents.length} documentos cargados
           </div>
         )}
+        <p className="health-disclaimer">
+          Antes de entrenar por tu cuenta, es importante conocer tu estado de salud. Tienes disponible un{" "}
+          <button
+            className="health-disclaimer-link"
+            onClick={() => (user ? setHealthModalOpen(true) : setAuthModalOpen(true))}
+          >
+            test rápido de prevención
+          </button>
+          .
+        </p>
       </header>
 
       <div className="tabs">
@@ -698,7 +737,26 @@ export default function HomePage() {
 
       {profileModalOpen && (
         <div className="modal-backdrop open" onClick={(e) => e.target === e.currentTarget && setProfileModalOpen(false)}>
-          <ProfileModal profile={profile} onClose={() => setProfileModalOpen(false)} onSave={saveProfile} />
+          <ProfileModal
+            profile={profile}
+            onClose={() => setProfileModalOpen(false)}
+            onSave={saveProfile}
+            healthScreening={healthScreening}
+            onOpenHealthTest={() => {
+              setProfileModalOpen(false);
+              setHealthModalOpen(true);
+            }}
+          />
+        </div>
+      )}
+
+      {healthModalOpen && (
+        <div className="modal-backdrop open" onClick={(e) => e.target === e.currentTarget && setHealthModalOpen(false)}>
+          <HealthTestModal
+            existing={healthScreening}
+            onClose={() => setHealthModalOpen(false)}
+            onSave={saveHealthScreening}
+          />
         </div>
       )}
     </div>
@@ -869,7 +927,7 @@ function AuthModal({ onClose, signInWithPassword, signUpWithPassword, signInWith
   );
 }
 
-function ProfileModal({ profile, onClose, onSave }) {
+function ProfileModal({ profile, onClose, onSave, healthScreening, onOpenHealthTest }) {
   const [fullName, setFullName] = useState(profile?.full_name || "");
   const [age, setAge] = useState(profile?.age ?? "");
   const [weight, setWeight] = useState(profile?.weight_kg ?? "");
@@ -930,6 +988,124 @@ function ProfileModal({ profile, onClose, onSave }) {
           {saving ? "Guardando…" : "Guardar cambios"}
         </button>
       </form>
+
+      <div className="health-test-section">
+        <div className="section-label" style={{ marginTop: 0 }}>Test de prevención</div>
+        {healthScreening ? (
+          <p className="auth-subtitle">
+            Hecho el {new Date(healthScreening.completed_at).toLocaleDateString("es-ES")}
+            {healthScreening.has_flag && <span className="health-flag-text"> · con recomendación pendiente</span>}
+          </p>
+        ) : (
+          <p className="auth-subtitle">Todavía no lo has hecho.</p>
+        )}
+        <button type="button" className="account-btn" onClick={onOpenHealthTest} style={{ width: "100%" }}>
+          {healthScreening ? "Repetir el test" : "Hacer el test"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function HealthTestModal({ existing, onClose, onSave }) {
+  const QUESTIONS = [
+    ["q1", "¿Un médico te ha diagnosticado alguna afección cardíaca y te ha recomendado limitar la actividad física por ello?"],
+    ["q2", "¿Sientes dolor en el pecho al hacer esfuerzo físico o en reposo?"],
+    ["q3", "¿Has perdido el conocimiento o el equilibrio de forma brusca en el último año, o sufres mareos frecuentes?"],
+    ["q4", "¿Tienes algún problema óseo o articular que ya te haya hecho modificar tu actividad física en el pasado?"],
+    ["q5", "¿Tomas actualmente medicación para la tensión arterial o el corazón?"],
+    ["q6", "¿Estás embarazada o has dado a luz en las últimas semanas?"],
+    ["q7", "¿Conoces alguna otra razón médica por la que deberías evitar hacer ejercicio sin supervisión?"],
+  ];
+
+  const [answers, setAnswers] = useState(() => {
+    const init = {};
+    QUESTIONS.forEach(([key]) => {
+      init[key] = existing?.answers?.[key] ?? null;
+    });
+    return init;
+  });
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState(null); // null | { hasFlag: bool }
+
+  const allAnswered = QUESTIONS.every(([key]) => answers[key] === true || answers[key] === false);
+
+  async function handleSubmit() {
+    setSaving(true);
+    const { error, hasFlag } = await onSave(answers);
+    setSaving(false);
+    if (!error) setResult({ hasFlag });
+  }
+
+  if (result) {
+    return (
+      <div className="modal auth-modal">
+        <button className="close-btn" onClick={onClose} aria-label="Cerrar">
+          ✕
+        </button>
+        <h2>Resultado</h2>
+        {result.hasFlag ? (
+          <p className="health-result-flag">
+            Según tus respuestas, te recomendamos consultar con un profesional de la salud antes de continuar
+            entrenando por tu cuenta. Esto no bloquea tu acceso a la aplicación — es solo una recomendación.
+          </p>
+        ) : (
+          <p className="auth-info">No se ha detectado ninguna señal de alerta en tus respuestas. Buen entrenamiento.</p>
+        )}
+        <button className="account-btn account-btn-primary" onClick={onClose} style={{ width: "100%", marginTop: 14 }}>
+          Cerrar
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="modal auth-modal health-test-modal">
+      <button className="close-btn" onClick={onClose} aria-label="Cerrar">
+        ✕
+      </button>
+      <h2>Test de prevención</h2>
+      <p className="auth-subtitle">
+        Responde con sinceridad. Esto no bloquea tu acceso a la app en ningún caso — solo te orienta sobre si
+        conviene consultar con un profesional antes de entrenar por tu cuenta.
+      </p>
+
+      <div className="health-questions">
+        {QUESTIONS.map(([key, text], i) => (
+          <div className="health-question" key={key}>
+            <p>{i + 1}. {text}</p>
+            <div className="health-question-options">
+              <label>
+                <input
+                  type="radio"
+                  name={key}
+                  checked={answers[key] === true}
+                  onChange={() => setAnswers((prev) => ({ ...prev, [key]: true }))}
+                />
+                Sí
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name={key}
+                  checked={answers[key] === false}
+                  onChange={() => setAnswers((prev) => ({ ...prev, [key]: false }))}
+                />
+                No
+              </label>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <button
+        className="account-btn account-btn-primary"
+        style={{ width: "100%", marginTop: 14 }}
+        disabled={!allAnswered || saving}
+        onClick={handleSubmit}
+      >
+        {saving ? "Guardando…" : "Ver resultado"}
+      </button>
     </div>
   );
 }

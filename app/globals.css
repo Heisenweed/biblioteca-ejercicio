@@ -136,6 +136,33 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 .completion-row:first-of-type { border-top: none; }
 .completion-row button { font-size: 10px; padding: 3px 8px; }
 
+.health-disclaimer {
+  font-size: 12.5px; color: var(--text-muted); margin: 14px 0 0; max-width: 640px; line-height: 1.5;
+}
+.health-disclaimer-link {
+  background: none; border: none; color: var(--teal); text-decoration: underline; cursor: pointer;
+  font-size: 12.5px; padding: 0; font-family: 'Inter', sans-serif;
+}
+.health-flag-dot {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--danger);
+  margin-left: 6px; vertical-align: middle;
+}
+.health-flag-text { color: var(--danger); }
+.health-test-section {
+  margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border);
+}
+.health-test-modal { max-width: 480px; }
+.health-questions { display: flex; flex-direction: column; gap: 14px; margin-top: 16px; }
+.health-question p { font-size: 13.5px; margin: 0 0 6px; }
+.health-question-options { display: flex; gap: 18px; }
+.health-question-options label {
+  display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-muted); cursor: pointer;
+}
+.health-result-flag {
+  background: rgba(232,96,76,0.1); border: 1px solid var(--danger); color: var(--text);
+  border-radius: 8px; padding: 14px; font-size: 13.5px; line-height: 1.5;
+}
+
 .required-mark { color: var(--danger); font-size: 10px; text-transform: none; letter-spacing: 0; font-weight: 600; }
 .optional-mark { color: var(--text-muted); font-size: 10px; text-transform: none; letter-spacing: 0; font-weight: 400; }
 .session-date { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
