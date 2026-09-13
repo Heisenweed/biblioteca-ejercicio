@@ -159,6 +159,14 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 .completion-row:first-of-type { border-top: none; }
 .completion-row button { font-size: 10px; padding: 3px 8px; }
 
+.tutorial-cta {
+  display: inline-flex; align-items: center; gap: 8px; margin-top: 16px;
+  background: rgba(198,241,53,0.12); border: 1px solid var(--accent); color: var(--accent);
+  padding: 10px 16px; border-radius: 100px; font-family: 'Inter', sans-serif; font-size: 13.5px;
+  font-weight: 600; cursor: pointer; transition: background 0.15s ease;
+}
+.tutorial-cta:hover { background: rgba(198,241,53,0.2); }
+
 .health-disclaimer {
   font-size: 12.5px; color: var(--text-muted); margin: 14px 0 0; max-width: 640px; line-height: 1.5;
 }

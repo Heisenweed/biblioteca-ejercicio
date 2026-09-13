@@ -366,28 +366,25 @@ export default function HomePage() {
     return () => clearTimeout(t);
   }, [filtered.length]);
 
-  // Filtro y búsqueda para la pestaña de documentos formativos.
+  // Filtro y búsqueda para la pestaña de artículos — el tutorial de la app
+  // vive fuera de aquí, en su propio botón en la pantalla principal.
+  const articleDocuments = useMemo(() => documents.filter((d) => d.category !== "app_guide"), [documents]);
+  const tutorialDoc = useMemo(() => documents.find((d) => d.category === "app_guide"), [documents]);
+
   const docCategoryOptions = useMemo(
-    () => unique(documents.map((d) => DOC_CATEGORY_NAMES[d.category] || d.category)),
-    [documents]
+    () => unique(articleDocuments.map((d) => DOC_CATEGORY_NAMES[d.category] || d.category)),
+    [articleDocuments]
   );
 
   const filteredDocuments = useMemo(() => {
     const q = docSearch.trim().toLowerCase();
-    let list = documents.filter((d) => {
+    return articleDocuments.filter((d) => {
       const catName = DOC_CATEGORY_NAMES[d.category] || d.category;
       if (docCategory && catName !== docCategory) return false;
       if (q && !(d.title.toLowerCase().includes(q) || (d.summary || "").toLowerCase().includes(q))) return false;
       return true;
     });
-    // El tutorial de la app siempre primero, sea cual sea el filtro/búsqueda activos.
-    list = [...list].sort((a, b) => {
-      if (a.category === "app_guide" && b.category !== "app_guide") return -1;
-      if (b.category === "app_guide" && a.category !== "app_guide") return 1;
-      return 0;
-    });
-    return list;
-  }, [documents, docSearch, docCategory]);
+  }, [articleDocuments, docSearch, docCategory]);
 
   function openExercise(ex) {
     setModal({ type: "exercise", data: ex });
@@ -430,6 +427,11 @@ export default function HomePage() {
             {exercises.length} ejercicios · {documents.length} documentos cargados
           </div>
         )}
+        {tutorialDoc && (
+          <button className="tutorial-cta" onClick={() => openDocument(tutorialDoc)}>
+            📖 ¿Primera vez aquí? Mira la guía rápida de la app
+          </button>
+        )}
         <p className="health-disclaimer">
           Antes de entrenar por tu cuenta, es importante conocer tu estado de salud. Tienes disponible un{" "}
           <button
@@ -450,7 +452,7 @@ export default function HomePage() {
           Biblioteca de ejercicios
         </button>
         <button className={`tab-btn ${activeTab === "docs" ? "active" : ""}`} onClick={() => setActiveTab("docs")}>
-          Documentos formativos
+          Artículos de valor
         </button>
         <button
           className={`tab-btn ${activeTab === "sessions" ? "active" : ""}`}
