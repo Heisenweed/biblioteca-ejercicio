@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { marked } from "marked";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
+import SessionsTab from "./SessionsTab";
 
 const LEVEL_NAMES = { beginner: "Principiante", intermediate: "Intermedio", advanced: "Avanzado" };
 const LEVEL_CLASS = { beginner: "beginner", intermediate: "intermediate", advanced: "advanced" };
@@ -376,6 +377,12 @@ export default function HomePage() {
         <button className={`tab-btn ${activeTab === "docs" ? "active" : ""}`} onClick={() => setActiveTab("docs")}>
           Documentos formativos
         </button>
+        <button
+          className={`tab-btn ${activeTab === "sessions" ? "active" : ""}`}
+          onClick={() => setActiveTab("sessions")}
+        >
+          Mis sesiones
+        </button>
       </div>
 
       {loading && <div className="loading-state">Cargando datos desde Supabase…</div>}
@@ -611,6 +618,10 @@ export default function HomePage() {
             ))}
           </div>
         </>
+      )}
+
+      {!loading && !error && activeTab === "sessions" && (
+        <SessionsTab user={user} exercises={exercises} onRequestLogin={() => setAuthModalOpen(true)} />
       )}
 
       {modal && (

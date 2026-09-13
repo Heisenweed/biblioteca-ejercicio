@@ -131,6 +131,59 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 .doc-card p { color: var(--text-muted); font-size: 13.5px; line-height: 1.5; margin: 0; }
 .doc-meta { display: flex; gap: 8px; flex-shrink: 0; }
 
+.sessions-locked {
+  text-align: center; padding: 60px 20px; color: var(--text-muted);
+}
+.sessions-locked p { margin-bottom: 16px; }
+
+.sessions-list-view, .session-builder, .sessions-detail { padding-bottom: 20px; }
+
+.picker-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; margin: 10px 0 4px;
+}
+.picker-card {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13.5px;
+}
+
+.session-items-list { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.session-item-editor {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;
+}
+.session-item-editor.session-item-in-group { border-color: var(--teal); background: var(--surface-alt); }
+.session-item-editor-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.session-item-name { font-family: 'Space Grotesk', sans-serif; font-size: 14px; flex: 1; }
+.session-item-controls { display: flex; gap: 4px; }
+.session-item-controls button { padding: 4px 8px; font-size: 11px; }
+.session-item-fields {
+  display: flex; flex-wrap: wrap; gap: 12px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-muted);
+}
+.session-item-fields label { display: flex; flex-direction: column; gap: 4px; min-width: 90px; }
+.session-item-fields input, .session-item-fields select {
+  background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 5px;
+  padding: 6px 8px; font-family: 'Inter', sans-serif; font-size: 13px; width: 100%;
+}
+.mode-toggle { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
+.mode-toggle select { margin-bottom: 4px; }
+
+.session-group-editor {
+  border: 1px solid var(--teal); border-radius: 10px; padding: 12px; background: rgba(63,169,160,0.05);
+}
+.session-group-editor-top {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 10px; font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px; color: var(--teal);
+}
+.session-group-editor-top label { display: flex; align-items: center; gap: 6px; color: var(--text-muted); }
+.session-group-editor-top input { width: 60px; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 5px; padding: 4px 6px; }
+
+.session-detail-title { font-family: 'Space Grotesk', sans-serif; font-size: 24px; margin: 14px 0 4px; }
+.session-detail-list { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.session-item-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; }
+.session-item-prescription { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--accent); margin-top: 3px; }
+.session-item-notes { font-size: 12.5px; color: var(--text-muted); margin-top: 4px; }
+.session-group-card { border: 1px solid var(--teal); border-radius: 10px; padding: 10px 14px; background: rgba(63,169,160,0.05); }
+.session-group-label { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--teal); text-transform: uppercase; margin-bottom: 8px; }
+
 .empty {
   grid-column: 1 / -1; text-align: center; padding: 60px 20px; color: var(--text-muted);
   font-family: 'IBM Plex Mono', monospace; font-size: 13px;
