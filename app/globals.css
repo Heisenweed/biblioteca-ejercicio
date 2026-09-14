@@ -132,6 +132,79 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 .doc-meta { display: flex; gap: 8px; flex-shrink: 0; }
 
 /* ---- Calendario de sesiones ---- */
+/* ---- Pestaña de progresión ---- */
+.progress-tab { padding-bottom: 30px; }
+.stat-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px; margin-bottom: 8px;
+}
+.stat-box {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px 12px; display: flex; flex-direction: column; gap: 4px; align-items: center; text-align: center;
+}
+.stat-value {
+  font-family: 'Space Grotesk', sans-serif; font-size: 26px; font-weight: 700; color: var(--accent);
+  line-height: 1;
+}
+.stat-label {
+  font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.03em; line-height: 1.3;
+}
+.progress-empty {
+  background: var(--surface); border: 1px dashed var(--border); border-radius: 8px;
+  padding: 18px; color: var(--text-muted); font-size: 13.5px; line-height: 1.55; margin-top: 14px;
+}
+.chart-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px; margin-bottom: 8px;
+}
+.chart-svg { width: 100%; max-width: 420px; height: auto; display: block; margin: 0 auto; }
+.chart-axis { stroke: var(--border); stroke-width: 1; }
+.chart-axis-label { fill: #9ca3ac; font-size: 8px; font-family: 'IBM Plex Mono', monospace; }
+.chart-line { fill: none; stroke: #c6f135; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart-area { fill: rgba(198, 241, 53, 0.10); stroke: none; }
+.chart-point { fill: #c6f135; }
+.chart-bar { fill: #3fa9a0; }
+.chart-bar.highlight { fill: #c6f135; }
+.chart-caption {
+  font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin-top: 10px; text-align: center;
+}
+.pr-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.pr-box {
+  flex: 1 1 120px; background: var(--surface-alt); border-radius: 8px; padding: 12px;
+  display: flex; flex-direction: column; gap: 3px; align-items: center; text-align: center;
+}
+.pr-value { font-family: 'Space Grotesk', sans-serif; font-size: 20px; color: var(--accent); }
+.pr-label {
+  font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.03em;
+}
+.exercise-history { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+.exercise-history-row {
+  display: flex; justify-content: space-between; gap: 10px; font-size: 12px;
+  padding: 6px 0; border-top: 1px solid var(--border);
+}
+.exercise-history-row:first-child { border-top: none; }
+.exercise-history-date { color: var(--text-muted); }
+.exercise-history-sets {
+  font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--accent); text-align: right;
+}
+.muscle-vol-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 12px; }
+.muscle-vol-name { flex: 0 0 110px; color: var(--text-muted); }
+.muscle-vol-bar { flex: 1; height: 8px; background: var(--surface-alt); border-radius: 4px; overflow: hidden; }
+.muscle-vol-fill { display: block; height: 100%; background: var(--teal); border-radius: 4px; }
+.muscle-vol-value {
+  flex: 0 0 62px; text-align: right; font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px; color: var(--text-muted);
+}
+.body-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 14px; }
+.bmi-row { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
+.bmi-value {
+  font-family: 'Space Grotesk', sans-serif; font-size: 30px; font-weight: 700; color: var(--accent);
+  line-height: 1; flex-shrink: 0;
+}
+.bmi-label { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; }
+
 /* ---- Pregunta previa al entrenar ---- */
 .training-ask {
   background: var(--surface); border: 1px solid var(--accent); border-radius: 10px;
@@ -387,6 +460,31 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   }
   .picker-card-row .account-btn {
     margin-left: auto;
+  }
+  .stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .stat-value {
+    font-size: 22px;
+  }
+  .muscle-vol-name {
+    flex: 0 0 82px;
+    font-size: 11px;
+  }
+  .muscle-vol-value {
+    flex: 0 0 52px;
+    font-size: 10px;
+  }
+  .exercise-history-row {
+    flex-direction: column;
+    gap: 2px;
+  }
+  .exercise-history-sets {
+    text-align: left;
+  }
+  .bmi-row {
+    flex-direction: column;
+    gap: 6px;
   }
 }
 

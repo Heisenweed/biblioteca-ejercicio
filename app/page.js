@@ -5,6 +5,7 @@ import { marked } from "marked";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import SessionsTab from "./SessionsTab";
+import ProgressTab from "./ProgressTab";
 
 const LEVEL_NAMES = { beginner: "Principiante", intermediate: "Intermedio", advanced: "Avanzado" };
 const LEVEL_CLASS = { beginner: "beginner", intermediate: "intermediate", advanced: "advanced" };
@@ -499,6 +500,12 @@ export default function HomePage() {
         >
           Mis sesiones
         </button>
+        <button
+          className={`tab-btn ${activeTab === "progress" ? "active" : ""}`}
+          onClick={() => setActiveTab("progress")}
+        >
+          Mi progreso
+        </button>
       </div>
 
       {loading && <div className="loading-state">Cargando datos desde Supabase…</div>}
@@ -753,6 +760,16 @@ export default function HomePage() {
 
       {!loading && !error && activeTab === "sessions" && (
         <SessionsTab user={user} exercises={exercises} onRequestLogin={() => setAuthModalOpen(true)} />
+      )}
+
+      {!loading && !error && activeTab === "progress" && (
+        <ProgressTab
+          user={user}
+          exercises={exercises}
+          profile={profile}
+          onRequestLogin={() => setAuthModalOpen(true)}
+          onSaveProfileWeight={(w) => saveProfile({ weight_kg: w })}
+        />
       )}
 
       {modal && (
