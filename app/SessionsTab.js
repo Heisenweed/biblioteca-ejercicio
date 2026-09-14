@@ -1106,6 +1106,7 @@ function toDayKey(d) {
 }
 
 function SessionCalendar({ routines, onOpenRoutine }) {
+  const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
@@ -1153,6 +1154,14 @@ function SessionCalendar({ routines, onOpenRoutine }) {
   const monthCount = grid.filter((d) => d && byDay[toDayKey(d)]).length;
 
   if (totalCompletions === 0) return null;
+
+  if (!open) {
+    return (
+      <button className="calendar-toggle" onClick={() => setOpen(true)}>
+        📅 Ver calendario de entrenamientos
+      </button>
+    );
+  }
 
   return (
     <div className="calendar-card">
@@ -1213,6 +1222,10 @@ function SessionCalendar({ routines, onOpenRoutine }) {
           ))}
         </div>
       )}
+
+      <button className="calendar-hide" onClick={() => setOpen(false)}>
+        Ocultar calendario
+      </button>
     </div>
   );
 }
