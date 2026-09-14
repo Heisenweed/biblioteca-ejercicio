@@ -5,6 +5,29 @@ import { supabase } from "../lib/supabaseClient";
 
 const LEVEL_NAMES = { beginner: "Principiante", intermediate: "Intermedio", advanced: "Avanzado" };
 
+const CATEGORY_NAMES = {
+  strength: "Fuerza",
+  stretch_dynamic: "Estiramiento dinámico",
+  stretch_static_active: "Estiramiento activo",
+  stretch_static_passive: "Estiramiento pasivo",
+  conditioning: "Acondicionamiento",
+};
+
+// Misma lógica de coincidencia que la biblioteca, para que el diseñador se
+// comporte exactamente igual que la pestaña principal.
+function matchesPickerFilters(e, f) {
+  const catName = CATEGORY_NAMES[e.category] || e.category;
+  if (f.search && !e.name.toLowerCase().includes(f.search.trim().toLowerCase())) return false;
+  if (f.category && catName !== f.category) return false;
+  if (f.bodyRegion && !(e.body_regions || []).includes(f.bodyRegion)) return false;
+  if (f.muscle && !(e.muscles || []).some((m) => m.name === f.muscle)) return false;
+  if (f.pattern && !(e.patterns || []).includes(f.pattern)) return false;
+  if (f.objective && !(e.objectives || []).includes(f.objective)) return false;
+  if (f.equip && !(e.equipment || []).some((eq) => eq.name === f.equip)) return false;
+  if (f.level && e.level !== f.level) return false;
+  return true;
+}
+
 function unique(arr) {
   return [...new Set(arr)].sort((a, b) => a.localeCompare(b, "es"));
 }
@@ -80,6 +103,8 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
   const [editingRoutineId, setEditingRoutineId] = useState(null);
   const [builderName, setBuilderName] = useState("");
   const [targetDuration, setTargetDuration] = useState("");
+  const [fCategory, setFCategory] = useState("");
+  const [fBodyRegion, setFBodyRegion] = useState("");
   const [fPattern, setFPattern] = useState("");
   const [fMuscle, setFMuscle] = useState("");
   const [fEquip, setFEquip] = useState("");
@@ -112,35 +137,57 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
       });
   }, [user, view]);
 
-  const patternOptions = useMemo(() => unique(exercises.flatMap((e) => e.patterns || [])), [exercises]);
-  const muscleOptions = useMemo(
-    () => unique(exercises.flatMap((e) => (e.muscles || []).map((m) => m.name))),
-    [exercises]
-  );
-  const equipOptions = useMemo(
-    () => unique(exercises.flatMap((e) => (e.equipment || []).map((eq) => eq.name))),
-    [exercises]
-  );
-  const objectiveOptions = useMemo(() => unique(exercises.flatMap((e) => e.objectives || [])), [exercises]);
+  // Cada desplegable calcula sus opciones aplicando todos los demás filtros
+  // activos menos el suyo, igual que en la biblioteca.
+  const baseF = { search: fSearch, category: fCategory, bodyRegion: fBodyRegion, pattern: fPattern, muscle: fMuscle, equip: fEquip, level: fLevel, objective: fObjective };
 
-  const filteredExercises = useMemo(() => {
-    const q = fSearch.trim().toLowerCase();
-    return exercises.filter((e) => {
-      if (q && !e.name.toLowerCase().includes(q)) return false;
-      if (fPattern && !(e.patterns || []).includes(fPattern)) return false;
-      if (fMuscle && !(e.muscles || []).some((m) => m.name === fMuscle)) return false;
-      if (fEquip && !(e.equipment || []).some((eq) => eq.name === fEquip)) return false;
-      if (fLevel && e.level !== fLevel) return false;
-      if (fObjective && !(e.objectives || []).includes(fObjective)) return false;
-      return true;
-    });
-  }, [exercises, fSearch, fPattern, fMuscle, fEquip, fLevel, fObjective]);
+  const categoryOptions = useMemo(() => {
+    const sub = exercises.filter((e) => matchesPickerFilters(e, { ...baseF, category: "" }));
+    return unique(sub.map((e) => CATEGORY_NAMES[e.category] || e.category));
+  }, [exercises, fSearch, fBodyRegion, fPattern, fMuscle, fEquip, fLevel, fObjective]);
+
+  const bodyRegionOptions = useMemo(() => {
+    const sub = exercises.filter((e) => matchesPickerFilters(e, { ...baseF, bodyRegion: "" }));
+    return unique(sub.flatMap((e) => e.body_regions || []));
+  }, [exercises, fSearch, fCategory, fPattern, fMuscle, fEquip, fLevel, fObjective]);
+
+  const muscleOptions = useMemo(() => {
+    const sub = exercises.filter((e) => matchesPickerFilters(e, { ...baseF, muscle: "" }));
+    return unique(sub.flatMap((e) => (e.muscles || []).map((m) => m.name)));
+  }, [exercises, fSearch, fCategory, fBodyRegion, fPattern, fEquip, fLevel, fObjective]);
+
+  const patternOptions = useMemo(() => {
+    const sub = exercises.filter((e) => matchesPickerFilters(e, { ...baseF, pattern: "" }));
+    return unique(sub.flatMap((e) => e.patterns || []));
+  }, [exercises, fSearch, fCategory, fBodyRegion, fMuscle, fEquip, fLevel, fObjective]);
+
+  const objectiveOptions = useMemo(() => {
+    const sub = exercises.filter((e) => matchesPickerFilters(e, { ...baseF, objective: "" }));
+    return unique(sub.flatMap((e) => e.objectives || []));
+  }, [exercises, fSearch, fCategory, fBodyRegion, fPattern, fMuscle, fEquip, fLevel]);
+
+  const equipOptions = useMemo(() => {
+    const sub = exercises.filter((e) => matchesPickerFilters(e, { ...baseF, equip: "" }));
+    return unique(sub.flatMap((e) => (e.equipment || []).map((eq) => eq.name)));
+  }, [exercises, fSearch, fCategory, fBodyRegion, fPattern, fMuscle, fLevel, fObjective]);
+
+  const levelOptions = useMemo(() => {
+    const sub = exercises.filter((e) => matchesPickerFilters(e, { ...baseF, level: "" }));
+    return unique(sub.map((e) => e.level));
+  }, [exercises, fSearch, fCategory, fBodyRegion, fPattern, fMuscle, fEquip, fObjective]);
+
+  const filteredExercises = useMemo(
+    () => exercises.filter((e) => matchesPickerFilters(e, baseF)),
+    [exercises, fSearch, fCategory, fBodyRegion, fPattern, fMuscle, fEquip, fLevel, fObjective]
+  );
 
   const hasActivePickerFilter = Boolean(
-    fSearch.trim() || fPattern || fMuscle || fEquip || fLevel || fObjective
+    fSearch.trim() || fCategory || fBodyRegion || fPattern || fMuscle || fEquip || fLevel || fObjective
   );
 
   function resetBuilderFilters() {
+    setFCategory("");
+    setFBodyRegion("");
     setFPattern("");
     setFMuscle("");
     setFEquip("");
@@ -832,20 +879,46 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
       <div className="filters">
         <div className="filter-group">
           <label>Buscar</label>
-          <input type="text" value={fSearch} onChange={(e) => setFSearch(e.target.value)} />
+          <input
+            type="text"
+            placeholder="Nombre del ejercicio…"
+            value={fSearch}
+            onChange={(e) => setFSearch(e.target.value)}
+          />
         </div>
         <div className="filter-group">
-          <label>Patrón</label>
+          <label>Tipo</label>
+          <select value={fCategory} onChange={(e) => setFCategory(e.target.value)}>
+            <option value="">Todos</option>
+            {categoryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div className="filter-group">
+          <label>Parte del cuerpo</label>
+          <select value={fBodyRegion} onChange={(e) => setFBodyRegion(e.target.value)}>
+            <option value="">Todas</option>
+            {bodyRegionOptions.map((b) => <option key={b} value={b}>{b}</option>)}
+          </select>
+        </div>
+        <div className="filter-group">
+          <label>Grupo muscular</label>
+          <select value={fMuscle} onChange={(e) => setFMuscle(e.target.value)}>
+            <option value="">Todos</option>
+            {muscleOptions.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+        <div className="filter-group">
+          <label>Patrón de movimiento</label>
           <select value={fPattern} onChange={(e) => setFPattern(e.target.value)}>
             <option value="">Todos</option>
             {patternOptions.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         </div>
         <div className="filter-group">
-          <label>Músculo</label>
-          <select value={fMuscle} onChange={(e) => setFMuscle(e.target.value)}>
+          <label>Objetivo</label>
+          <select value={fObjective} onChange={(e) => setFObjective(e.target.value)}>
             <option value="">Todos</option>
-            {muscleOptions.map((m) => <option key={m} value={m}>{m}</option>)}
+            {objectiveOptions.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
         </div>
         <div className="filter-group">
@@ -859,14 +932,7 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
           <label>Nivel</label>
           <select value={fLevel} onChange={(e) => setFLevel(e.target.value)}>
             <option value="">Todos</option>
-            {Object.entries(LEVEL_NAMES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
-        </div>
-        <div className="filter-group">
-          <label>Objetivo</label>
-          <select value={fObjective} onChange={(e) => setFObjective(e.target.value)}>
-            <option value="">Todos</option>
-            {objectiveOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+            {levelOptions.map((k) => <option key={k} value={k}>{LEVEL_NAMES[k]}</option>)}
           </select>
         </div>
       </div>

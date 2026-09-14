@@ -29,6 +29,19 @@ const DOC_CATEGORY_NAMES = {
   wellness_basics: "Hábitos y bienestar",
 };
 
+// Calcula la edad a partir de la fecha de nacimiento, para que no haya que
+// actualizarla manualmente cada año.
+function calcAge(birthDate) {
+  if (!birthDate) return null;
+  const b = new Date(birthDate);
+  if (Number.isNaN(b.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - b.getFullYear();
+  const monthDiff = today.getMonth() - b.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < b.getDate())) age -= 1;
+  return age >= 0 && age < 130 ? age : null;
+}
+
 function unique(arr) {
   return [...new Set(arr)].sort((a, b) => a.localeCompare(b, "es"));
 }
@@ -197,7 +210,7 @@ export default function HomePage() {
     }
     supabase
       .from("profiles")
-      .select("full_name, age, weight_kg, height_cm")
+      .select("full_name, birth_date, weight_kg, height_cm")
       .eq("id", user.id)
       .single()
       .then(({ data, error }) => {
@@ -444,7 +457,7 @@ export default function HomePage() {
         <div className="eyebrow">Tu biblioteca personal de entrenamiento</div>
         <h1>Biblioteca de ejercicios</h1>
         <p>
-          Filtra ejercicios por músculo, patrón de movimiento, equipamiento, nivel y objetivo — y no te quedes solo
+          Filtra ejercicios por músculo, patrón de movimiento, equipamiento, nivel y objetivo. Y no te quedes solo
           en la teoría: diseña, guarda y sigue tus propias sesiones de entrenamiento aquí mismo, con los artículos
           de valor para aprender el porqué de cada decisión.
         </p>
@@ -591,7 +604,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <p className="live-filter-note">Los resultados se actualizan al instante con cada filtro — no hace falta pulsar nada.</p>
+          <p className="live-filter-note">Los resultados se actualizan al instante con cada filtro. No hace falta pulsar nada.</p>
 
           <div className="sort-row">
             <label>Ordenar por</label>
@@ -691,7 +704,7 @@ export default function HomePage() {
       {!loading && !error && activeTab === "docs" && (
         <>
           <p className="docs-intro">
-            Contenido formativo para aprender a diseñar tus propias rutinas — teoría y aplicación práctica
+            Contenido formativo para aprender a diseñar tus propias rutinas: teoría y aplicación práctica
             sobre esta misma biblioteca.
           </p>
           <div className="filters" style={{ marginBottom: 18 }}>
@@ -915,7 +928,7 @@ function AuthModal({ onClose, signInWithPassword, signUpWithPassword, signInWith
       <p className="auth-subtitle">
         {mode === "login"
           ? "Necesario para guardar favoritos y diseñar tus propias sesiones."
-          : "Es gratis — la suscripción de pago todavía no está activa."}
+          : "Es gratis. La suscripción de pago todavía no está activa."}
       </p>
 
       <button type="button" className="google-btn" onClick={() => signInWithGoogle()}>
@@ -962,7 +975,7 @@ function AuthModal({ onClose, signInWithPassword, signUpWithPassword, signInWith
 
 function ProfileModal({ profile, onClose, onSave, healthScreening, onOpenHealthTest }) {
   const [fullName, setFullName] = useState(profile?.full_name || "");
-  const [age, setAge] = useState(profile?.age ?? "");
+  const [birthDate, setBirthDate] = useState(profile?.birth_date ?? "");
   const [weight, setWeight] = useState(profile?.weight_kg ?? "");
   const [height, setHeight] = useState(profile?.height_cm ?? "");
   const [saving, setSaving] = useState(false);
@@ -976,7 +989,7 @@ function ProfileModal({ profile, onClose, onSave, healthScreening, onOpenHealthT
     setSavedOk(false);
     const error = await onSave({
       full_name: fullName.trim() || null,
-      age: age === "" ? null : Number(age),
+      birth_date: birthDate === "" ? null : birthDate,
       weight_kg: weight === "" ? null : Number(weight),
       height_cm: height === "" ? null : Number(height),
     });
@@ -994,7 +1007,7 @@ function ProfileModal({ profile, onClose, onSave, healthScreening, onOpenHealthT
         ✕
       </button>
       <h2>Editar perfil</h2>
-      <p className="auth-subtitle">Este nombre es lo único que ven otras personas — nunca tu email.</p>
+      <p className="auth-subtitle">Este nombre es lo único que ven otras personas, nunca tu email.</p>
 
       <form onSubmit={handleSubmit} className="auth-form">
         <label>
@@ -1002,8 +1015,11 @@ function ProfileModal({ profile, onClose, onSave, healthScreening, onOpenHealthT
           <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Cómo quieres que te llamen" />
         </label>
         <label>
-          Edad
-          <input type="number" min="0" max="120" value={age} onChange={(e) => setAge(e.target.value)} />
+          Fecha de nacimiento
+          <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+          {calcAge(birthDate) !== null && (
+            <span className="field-hint">{calcAge(birthDate)} años</span>
+          )}
         </label>
         <label>
           Peso (kg)
@@ -1080,7 +1096,7 @@ function HealthTestModal({ existing, onClose, onSave }) {
         {result.hasFlag ? (
           <p className="health-result-flag">
             Según tus respuestas, te recomendamos consultar con un profesional de la salud antes de continuar
-            entrenando por tu cuenta. Esto no bloquea tu acceso a la aplicación — es solo una recomendación.
+            entrenando por tu cuenta. Esto no bloquea tu acceso a la aplicación: es solo una recomendación.
           </p>
         ) : (
           <p className="auth-info">No se ha detectado ninguna señal de alerta en tus respuestas. Buen entrenamiento.</p>
@@ -1099,7 +1115,7 @@ function HealthTestModal({ existing, onClose, onSave }) {
       </button>
       <h2>Test de prevención</h2>
       <p className="auth-subtitle">
-        Responde con sinceridad. Esto no bloquea tu acceso a la app en ningún caso — solo te orienta sobre si
+        Responde con sinceridad. Esto no bloquea tu acceso a la app en ningún caso, solo te orienta sobre si
         conviene consultar con un profesional antes de entrenar por tu cuenta.
       </p>
 

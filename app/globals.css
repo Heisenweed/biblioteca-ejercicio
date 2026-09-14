@@ -132,6 +132,10 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 .doc-meta { display: flex; gap: 8px; flex-shrink: 0; }
 
 /* ---- Calendario de sesiones ---- */
+.field-hint {
+  font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--accent); margin-top: 2px;
+}
+
 .calendar-toggle {
   display: inline-flex; align-items: center; gap: 8px; margin-bottom: 18px;
   background: var(--surface); border: 1px solid var(--border); color: var(--text-muted);
