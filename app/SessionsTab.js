@@ -20,15 +20,19 @@ function newTempId() {
   return `tmp-${tempIdCounter}`;
 }
 
-// Estima cuántos segundos ocupa una serie/ronda de un ejercicio, para el
-// cálculo de duración en tiempo real. Es una estimación, no un cronómetro.
-function estimateItemSeconds(item) {
-  if (item.mode === "time") return Number(item.duration_seconds) || 30;
-  return 40; // tiempo estimado de una serie de repeticiones estándar
+// Extrae un número orientativo de un texto de repeticiones ("8-12" -> 8).
+// Se usa solo para pre-rellenar; el usuario siempre puede corregirlo.
+function parseRepsHint(reps) {
+  if (!reps) return "";
+  const m = String(reps).match(/\d+/);
+  return m ? m[0] : "";
 }
 
-// Agrupa los ejercicios en bloques para renderizar: los que comparten
-// superset_group se muestran juntos como un circuito.
+function estimateItemSeconds(item) {
+  if (item.mode === "time") return Number(item.duration_seconds) || 30;
+  return 40;
+}
+
 function buildRenderGroups(items) {
   const groups = [];
   const seen = new Set();
@@ -36,7 +40,11 @@ function buildRenderGroups(items) {
     if (item.superset_group != null) {
       if (seen.has(item.superset_group)) continue;
       seen.add(item.superset_group);
-      groups.push({ type: "group", groupId: item.superset_group, items: items.filter((i) => i.superset_group === item.superset_group) });
+      groups.push({
+        type: "group",
+        groupId: item.superset_group,
+        items: items.filter((i) => i.superset_group === item.superset_group),
+      });
     } else {
       groups.push({ type: "single", item });
     }
@@ -50,7 +58,8 @@ function estimateTotalMinutes(items) {
   for (const g of groups) {
     if (g.type === "single") {
       const rounds = Number(g.item.sets) || 1;
-      totalSeconds += rounds * estimateItemSeconds(g.item) + Math.max(0, rounds - 1) * (Number(g.item.rest_seconds) || 0);
+      totalSeconds +=
+        rounds * estimateItemSeconds(g.item) + Math.max(0, rounds - 1) * (Number(g.item.rest_seconds) || 0);
     } else {
       const rounds = Number(g.items[0].sets) || 1;
       const perRound = g.items.reduce((sum, it) => sum + estimateItemSeconds(it), 0);
@@ -62,12 +71,13 @@ function estimateTotalMinutes(items) {
 }
 
 export default function SessionsTab({ user, exercises, onRequestLogin }) {
-  const [view, setView] = useState("list"); // 'list' | 'builder' | 'detail'
+  const [view, setView] = useState("list"); // 'list' | 'builder' | 'detail' | 'training'
   const [routines, setRoutines] = useState([]);
   const [routinesLoading, setRoutinesLoading] = useState(false);
   const [detailRoutine, setDetailRoutine] = useState(null);
 
-  // ---- Estado del constructor ----
+  // ---- Constructor ----
+  const [editingRoutineId, setEditingRoutineId] = useState(null);
   const [builderName, setBuilderName] = useState("");
   const [targetDuration, setTargetDuration] = useState("");
   const [fPattern, setFPattern] = useState("");
@@ -76,10 +86,17 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
   const [fLevel, setFLevel] = useState("");
   const [fObjective, setFObjective] = useState("");
   const [fSearch, setFSearch] = useState("");
-  const [items, setItems] = useState([]); // los ejercicios ya añadidos a la sesión
+  const [items, setItems] = useState([]);
   const [selectedForGroup, setSelectedForGroup] = useState(new Set());
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+
+  // ---- Modo entrenamiento ----
+  const [trainingRoutine, setTrainingRoutine] = useState(null);
+  const [trainingLog, setTrainingLog] = useState([]); // [{exerciseId, name, mode, sets:[{weight,reps,duration,done}], lastTime}]
+  const [trainingLoading, setTrainingLoading] = useState(false);
+  const [finishing, setFinishing] = useState(false);
+  const [trainingError, setTrainingError] = useState(null);
 
   useEffect(() => {
     if (!user || view !== "list") return;
@@ -123,18 +140,53 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
     fSearch.trim() || fPattern || fMuscle || fEquip || fLevel || fObjective
   );
 
-  function startNewSession() {
-    setBuilderName("");
-    setTargetDuration("");
+  function resetBuilderFilters() {
     setFPattern("");
     setFMuscle("");
     setFEquip("");
     setFLevel("");
     setFObjective("");
     setFSearch("");
+  }
+
+  function startNewSession() {
+    setEditingRoutineId(null);
+    setBuilderName("");
+    setTargetDuration("");
+    resetBuilderFilters();
     setItems([]);
     setSelectedForGroup(new Set());
     setSaveError(null);
+    setView("builder");
+  }
+
+  // Carga una sesión ya guardada dentro del constructor para poder modificarla.
+  function startEditSession(routine) {
+    setEditingRoutineId(routine.id);
+    setBuilderName(routine.name || "");
+    setTargetDuration(routine.target_duration_minutes ?? "");
+    resetBuilderFilters();
+    setSelectedForGroup(new Set());
+    setSaveError(null);
+
+    const loaded = [...(routine.routine_exercises || [])]
+      .sort((a, b) => a.order_index - b.order_index)
+      .map((ri) => {
+        const ex = exercises.find((e) => e.id === ri.exercise_id) || { id: ri.exercise_id, name: "Ejercicio" };
+        return {
+          tempId: newTempId(),
+          exercise: ex,
+          mode: ri.duration_seconds != null ? "time" : "reps",
+          sets: ri.sets ?? 3,
+          reps: ri.reps ?? "10",
+          duration_seconds: ri.duration_seconds ?? 30,
+          rest_seconds: ri.rest_seconds ?? 60,
+          load_note: ri.load_note ?? "",
+          notes: ri.notes ?? "",
+          superset_group: ri.superset_group,
+        };
+      });
+    setItems(loaded);
     setView("builder");
   }
 
@@ -192,8 +244,11 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
     if (selectedForGroup.size < 2) return;
     const existingGroupIds = items.map((i) => i.superset_group).filter((g) => g != null);
     const nextGroupId = existingGroupIds.length ? Math.max(...existingGroupIds) + 1 : 1;
+    const referenceSets = items.find((x) => selectedForGroup.has(x.tempId))?.sets ?? 3;
     setItems((prev) =>
-      prev.map((i) => (selectedForGroup.has(i.tempId) ? { ...i, superset_group: nextGroupId, sets: prev.find((x) => selectedForGroup.has(x.tempId)).sets } : i))
+      prev.map((i) =>
+        selectedForGroup.has(i.tempId) ? { ...i, superset_group: nextGroupId, sets: referenceSets } : i
+      )
     );
     setSelectedForGroup(new Set());
   }
@@ -220,21 +275,48 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
     setSaveError(null);
 
     try {
-      const { data: routine, error: routineError } = await supabase
-        .from("routines")
-        .insert({
-          user_id: user.id,
-          name: builderName.trim(),
-          target_duration_minutes: targetDuration ? Number(targetDuration) : null,
-          design_filters: { patterns: fPattern, muscle: fMuscle, equipment: fEquip, level: fLevel, objective: fObjective },
-        })
-        .select()
-        .single();
+      let routineId = editingRoutineId;
 
-      if (routineError) throw routineError;
+      if (editingRoutineId) {
+        const { error: updErr } = await supabase
+          .from("routines")
+          .update({
+            name: builderName.trim(),
+            target_duration_minutes: targetDuration ? Number(targetDuration) : null,
+          })
+          .eq("id", editingRoutineId);
+        if (updErr) throw updErr;
+
+        // Se reemplazan los ejercicios por completo: más simple y fiable que
+        // intentar reconciliar altas, bajas y reordenaciones una a una.
+        const { error: delErr } = await supabase
+          .from("routine_exercises")
+          .delete()
+          .eq("routine_id", editingRoutineId);
+        if (delErr) throw delErr;
+      } else {
+        const { data: routine, error: routineError } = await supabase
+          .from("routines")
+          .insert({
+            user_id: user.id,
+            name: builderName.trim(),
+            target_duration_minutes: targetDuration ? Number(targetDuration) : null,
+            design_filters: {
+              patterns: fPattern,
+              muscle: fMuscle,
+              equipment: fEquip,
+              level: fLevel,
+              objective: fObjective,
+            },
+          })
+          .select()
+          .single();
+        if (routineError) throw routineError;
+        routineId = routine.id;
+      }
 
       const rows = items.map((item, index) => ({
-        routine_id: routine.id,
+        routine_id: routineId,
         exercise_id: item.exercise.id,
         order_index: index,
         sets: item.sets ? Number(item.sets) : null,
@@ -250,7 +332,7 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
       if (itemsError) throw itemsError;
 
       setSaving(false);
-
+      setEditingRoutineId(null);
       setView("list");
     } catch (err) {
       setSaveError(err?.message || "No se pudo guardar la sesión. Inténtalo de nuevo.");
@@ -261,19 +343,6 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
   async function deleteRoutine(id) {
     await supabase.from("routines").delete().eq("id", id);
     setRoutines((prev) => prev.filter((r) => r.id !== id));
-  }
-
-  async function markCompletedToday(routineId) {
-    const { data, error } = await supabase
-      .from("routine_completions")
-      .insert({ routine_id: routineId, user_id: user.id })
-      .select()
-      .single();
-    if (error) return;
-    const updateWith = (r) =>
-      r.id === routineId ? { ...r, routine_completions: [...(r.routine_completions || []), data] } : r;
-    setRoutines((prev) => prev.map(updateWith));
-    setDetailRoutine((prev) => (prev && prev.id === routineId ? updateWith(prev) : prev));
   }
 
   async function undoCompletion(completionId, routineId) {
@@ -291,7 +360,158 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
     setView("detail");
   }
 
-  // ---------------------------------------------------------------------
+  // ------------------------------------------------------------------
+  // MODO ENTRENAMIENTO
+  // ------------------------------------------------------------------
+  async function startTraining(routine) {
+    setTrainingRoutine(routine);
+    setTrainingError(null);
+    setTrainingLoading(true);
+    setView("training");
+
+    const ordered = [...(routine.routine_exercises || [])].sort((a, b) => a.order_index - b.order_index);
+    const exerciseIds = ordered.map((ri) => ri.exercise_id);
+
+    // Trae los registros previos del usuario para estos ejercicios, para
+    // pre-rellenar con lo que hizo la última vez.
+    let lastByExercise = {};
+    if (exerciseIds.length) {
+      const { data: previous } = await supabase
+        .from("exercise_set_logs")
+        .select("exercise_id, set_number, weight_kg, reps_done, duration_seconds, created_at")
+        .eq("user_id", user.id)
+        .in("exercise_id", exerciseIds)
+        .order("created_at", { ascending: false })
+        .limit(400);
+
+      if (previous) {
+        for (const log of previous) {
+          if (!lastByExercise[log.exercise_id]) lastByExercise[log.exercise_id] = [];
+          // Solo nos quedamos con la tanda más reciente de cada ejercicio.
+          const bucket = lastByExercise[log.exercise_id];
+          const newestDate = bucket.length ? bucket[0].created_at : log.created_at;
+          if (log.created_at === newestDate) bucket.push(log);
+        }
+      }
+    }
+
+    const built = ordered.map((ri) => {
+      const ex = exercises.find((e) => e.id === ri.exercise_id);
+      const name = ex?.name || "Ejercicio";
+      const mode = ri.duration_seconds != null ? "time" : "reps";
+      const numSets = Math.max(1, Number(ri.sets) || 1);
+      const prev = (lastByExercise[ri.exercise_id] || []).sort((a, b) => a.set_number - b.set_number);
+
+      const sets = Array.from({ length: numSets }, (_, i) => {
+        const p = prev[i];
+        return {
+          weight: p?.weight_kg != null ? String(p.weight_kg) : "",
+          reps: p?.reps_done != null ? String(p.reps_done) : parseRepsHint(ri.reps),
+          duration: p?.duration_seconds != null ? String(p.duration_seconds) : String(ri.duration_seconds ?? 30),
+          done: false,
+        };
+      });
+
+      let lastTimeLabel = null;
+      if (prev.length) {
+        const p = prev[0];
+        if (mode === "time") {
+          lastTimeLabel = `Última vez: ${p.duration_seconds ?? "?"}s`;
+        } else {
+          const w = p.weight_kg != null ? `${p.weight_kg} kg × ` : "";
+          lastTimeLabel = `Última vez: ${w}${p.reps_done ?? "?"} rep`;
+        }
+      }
+
+      return {
+        exerciseId: ri.exercise_id,
+        name,
+        mode,
+        prescription: mode === "time" ? `${ri.sets ?? 1} × ${ri.duration_seconds}s` : `${ri.sets ?? 1} × ${ri.reps ?? "-"}`,
+        loadNote: ri.load_note,
+        supersetGroup: ri.superset_group,
+        sets,
+        lastTimeLabel,
+      };
+    });
+
+    setTrainingLog(built);
+    setTrainingLoading(false);
+  }
+
+  function updateSet(exerciseIndex, setIndex, field, value) {
+    setTrainingLog((prev) =>
+      prev.map((item, i) => {
+        if (i !== exerciseIndex) return item;
+        const sets = item.sets.map((s, j) => (j === setIndex ? { ...s, [field]: value } : s));
+        return { ...item, sets };
+      })
+    );
+  }
+
+  function toggleSetDone(exerciseIndex, setIndex) {
+    setTrainingLog((prev) =>
+      prev.map((item, i) => {
+        if (i !== exerciseIndex) return item;
+        const sets = item.sets.map((s, j) => (j === setIndex ? { ...s, done: !s.done } : s));
+        return { ...item, sets };
+      })
+    );
+  }
+
+  const completedSetsCount = useMemo(
+    () => trainingLog.reduce((sum, it) => sum + it.sets.filter((s) => s.done).length, 0),
+    [trainingLog]
+  );
+  const totalSetsCount = useMemo(
+    () => trainingLog.reduce((sum, it) => sum + it.sets.length, 0),
+    [trainingLog]
+  );
+
+  async function finishTraining() {
+    setFinishing(true);
+    setTrainingError(null);
+    try {
+      const { data: completion, error: compErr } = await supabase
+        .from("routine_completions")
+        .insert({ routine_id: trainingRoutine.id, user_id: user.id })
+        .select()
+        .single();
+      if (compErr) throw compErr;
+
+      const rows = [];
+      trainingLog.forEach((item) => {
+        item.sets.forEach((s, idx) => {
+          if (!s.done) return; // solo se guardan las series marcadas como hechas
+          rows.push({
+            completion_id: completion.id,
+            user_id: user.id,
+            exercise_id: item.exerciseId,
+            exercise_name: item.name,
+            set_number: idx + 1,
+            weight_kg: s.weight === "" ? null : Number(s.weight),
+            reps_done: item.mode === "reps" && s.reps !== "" ? Number(s.reps) : null,
+            duration_seconds: item.mode === "time" && s.duration !== "" ? Number(s.duration) : null,
+          });
+        });
+      });
+
+      if (rows.length) {
+        const { error: logErr } = await supabase.from("exercise_set_logs").insert(rows);
+        if (logErr) throw logErr;
+      }
+
+      setFinishing(false);
+      setTrainingRoutine(null);
+      setTrainingLog([]);
+      setView("list");
+    } catch (err) {
+      setTrainingError(err?.message || "No se pudo guardar el entrenamiento.");
+      setFinishing(false);
+    }
+  }
+
+  // ------------------------------------------------------------------
   if (!user) {
     return (
       <div className="sessions-locked">
@@ -303,14 +523,115 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
     );
   }
 
+  // ---------------- VISTA: MODO ENTRENAMIENTO ----------------
+  if (view === "training" && trainingRoutine) {
+    return (
+      <div className="training-view">
+        <button className="account-btn" onClick={() => setView("list")}>← Salir sin guardar</button>
+        <h2 className="session-detail-title">{trainingRoutine.name}</h2>
+        <div className="session-date">Entrenando · {formatDate(new Date().toISOString())}</div>
+
+        {trainingLoading && <div className="loading-state">Preparando tu sesión…</div>}
+
+        {!trainingLoading && (
+          <>
+            <div className="training-progress">
+              {completedSetsCount} de {totalSetsCount} series completadas
+            </div>
+
+            <div className="training-list">
+              {trainingLog.map((item, exIdx) => (
+                <div className={`training-exercise ${item.supersetGroup != null ? "in-circuit" : ""}`} key={item.exerciseId + exIdx}>
+                  <div className="training-exercise-head">
+                    <span className="session-item-name">{item.name}</span>
+                    {item.supersetGroup != null && <span className="circuit-chip">Circuito</span>}
+                  </div>
+                  <div className="training-prescription">
+                    Plan: {item.prescription}
+                    {item.loadNote ? ` · ${item.loadNote}` : ""}
+                  </div>
+                  {item.lastTimeLabel && <div className="training-lasttime">{item.lastTimeLabel}</div>}
+
+                  <div className="training-sets">
+                    {item.sets.map((s, setIdx) => (
+                      <div className={`training-set-row ${s.done ? "done" : ""}`} key={setIdx}>
+                        <span className="set-label">{setIdx + 1}</span>
+                        {item.mode === "reps" ? (
+                          <>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              placeholder="kg"
+                              value={s.weight}
+                              onChange={(e) => updateSet(exIdx, setIdx, "weight", e.target.value)}
+                            />
+                            <span className="set-x">×</span>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              placeholder="rep"
+                              value={s.reps}
+                              onChange={(e) => updateSet(exIdx, setIdx, "reps", e.target.value)}
+                            />
+                          </>
+                        ) : (
+                          <>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              placeholder="seg"
+                              value={s.duration}
+                              onChange={(e) => updateSet(exIdx, setIdx, "duration", e.target.value)}
+                            />
+                            <span className="set-x">seg</span>
+                          </>
+                        )}
+                        <button
+                          className={`set-done-btn ${s.done ? "active" : ""}`}
+                          onClick={() => toggleSetDone(exIdx, setIdx)}
+                          aria-label="Marcar serie como hecha"
+                        >
+                          ✓
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {trainingError && <p className="auth-error">{trainingError}</p>}
+
+            <button
+              className="account-btn account-btn-primary"
+              style={{ marginTop: 20, width: "100%" }}
+              disabled={finishing}
+              onClick={finishTraining}
+            >
+              {finishing ? "Guardando…" : "Terminar y guardar sesión"}
+            </button>
+            <p className="training-hint">
+              Solo se guardan las series que hayas marcado con ✓. La próxima vez aparecerán ya rellenadas con
+              estos valores.
+            </p>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // ---------------- VISTA: DETALLE ----------------
   if (view === "detail" && detailRoutine) {
-    const detailItems = [...(detailRoutine.routine_exercises || [])].sort((a, b) => a.order_index - b.order_index);
+    const detailItems = [...(detailRoutine.routine_exercises || [])].sort(
+      (a, b) => a.order_index - b.order_index
+    );
     const renderGroups = buildRenderGroups(
       detailItems.map((ri) => ({
         ...ri,
         exercise: exercises.find((e) => e.id === ri.exercise_id) || { name: "Ejercicio", level: "beginner" },
       }))
     );
+
     return (
       <div className="sessions-detail">
         <button className="account-btn" onClick={() => setView("list")}>← Volver a mis sesiones</button>
@@ -320,13 +641,14 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
           <p className="docs-intro">Duración prevista: {detailRoutine.target_duration_minutes} min</p>
         )}
 
-        <button
-          className="account-btn account-btn-primary"
-          style={{ margin: "14px 0" }}
-          onClick={() => markCompletedToday(detailRoutine.id)}
-        >
-          ✓ Marcar como hecha hoy
-        </button>
+        <div className="detail-actions">
+          <button className="account-btn account-btn-primary" onClick={() => startTraining(detailRoutine)}>
+            ▶ Entrenar ahora
+          </button>
+          <button className="account-btn" onClick={() => startEditSession(detailRoutine)}>
+            Editar sesión
+          </button>
+        </div>
 
         {(detailRoutine.routine_completions || []).length > 0 && (
           <div className="completion-history">
@@ -334,10 +656,11 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
             {[...detailRoutine.routine_completions]
               .sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at))
               .map((c) => (
-                <div className="completion-row" key={c.id}>
-                  <span>{formatDate(c.completed_at)}</span>
-                  <button className="account-btn" onClick={() => undoCompletion(c.id, detailRoutine.id)}>Deshacer</button>
-                </div>
+                <CompletionRow
+                  key={c.id}
+                  completion={c}
+                  onUndo={() => undoCompletion(c.id, detailRoutine.id)}
+                />
               ))}
           </div>
         )}
@@ -378,11 +701,12 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
     );
   }
 
+  // ---------------- VISTA: LISTA ----------------
   if (view === "list") {
     return (
       <div className="sessions-list-view">
         <p className="docs-intro">
-          Diseña tus propias sesiones eligiendo ejercicios de la biblioteca, con tu propio volumen y orden.
+          Diseña tus propias sesiones eligiendo ejercicios de la biblioteca, entrénalas y registra lo que haces.
         </p>
         <button className="account-btn account-btn-primary" onClick={startNewSession} style={{ marginBottom: 18 }}>
           + Nueva sesión
@@ -392,57 +716,106 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
           <div className="empty">Todavía no has guardado ninguna sesión.</div>
         )}
         <div className="docs-list">
-          {routines.map((r) => (
-            <div className="doc-card" key={r.id} onClick={() => openDetail(r)} tabIndex={0}>
-              <div className="doc-card-top">
-                <h3>{r.name}</h3>
-                <button
-                  className="account-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteRoutine(r.id);
-                  }}
-                >
-                  Eliminar
-                </button>
+          {routines.map((r) => {
+            const completions = r.routine_completions || [];
+            const last = completions.length
+              ? [...completions].sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at))[0]
+              : null;
+            return (
+              <div className="doc-card" key={r.id} onClick={() => openDetail(r)} tabIndex={0}>
+                <div className="doc-card-top">
+                  <h3>{r.name}</h3>
+                  <div className="doc-meta">
+                    <button
+                      className="account-btn account-btn-primary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startTraining(r);
+                      }}
+                    >
+                      ▶ Entrenar
+                    </button>
+                    <button
+                      className="account-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startEditSession(r);
+                      }}
+                    >
+                      Editar
+                    </button>
+                    <button
+                      className="account-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteRoutine(r.id);
+                      }}
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                </div>
+                <p>
+                  {(r.routine_exercises || []).length} ejercicios
+                  {r.target_duration_minutes ? ` · ~${r.target_duration_minutes} min previstos` : ""}
+                </p>
+                <div className="session-date">
+                  Creada el {formatDate(r.created_at)}
+                  {last ? (
+                    <> · ✓ Última vez: {formatDate(last.completed_at)} · hecha {completions.length}{" "}
+                      {completions.length === 1 ? "vez" : "veces"}</>
+                  ) : (
+                    <> · aún no realizada</>
+                  )}
+                </div>
               </div>
-              <p>
-                {(r.routine_exercises || []).length} ejercicios
-                {r.target_duration_minutes ? ` · ~${r.target_duration_minutes} min previstos` : ""}
-              </p>
-              <div className="session-date">
-                Creada el {formatDate(r.created_at)}
-                {(r.routine_completions || []).length > 0 ? (
-                  <> · ✓ Última vez: {formatDate(
-                    [...r.routine_completions].sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at))[0].completed_at
-                  )} · hecha {r.routine_completions.length} {r.routine_completions.length === 1 ? "vez" : "veces"}</>
-                ) : (
-                  <> · aún no realizada</>
-                )}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
   }
 
-  // ---- view === "builder" ----
+  // ---------------- VISTA: CONSTRUCTOR ----------------
   const estimatedMinutes = estimateTotalMinutes(items);
   const renderGroups = buildRenderGroups(items);
 
   return (
     <div className="session-builder">
-      <button className="account-btn" onClick={() => setView("list")}>← Cancelar</button>
+      <button
+        className="account-btn"
+        onClick={() => {
+          setEditingRoutineId(null);
+          setView("list");
+        }}
+      >
+        ← Cancelar
+      </button>
+
+      {editingRoutineId && <div className="editing-banner">Estás editando una sesión ya guardada</div>}
 
       <div className="filters" style={{ marginTop: 14 }}>
         <div className="filter-group">
-          <label>Nombre de la sesión <span className="required-mark">* obligatorio</span></label>
-          <input type="text" value={builderName} onChange={(e) => setBuilderName(e.target.value)} placeholder="Torso lunes" />
+          <label>
+            Nombre de la sesión <span className="required-mark">* obligatorio</span>
+          </label>
+          <input
+            type="text"
+            value={builderName}
+            onChange={(e) => setBuilderName(e.target.value)}
+            placeholder="Torso lunes"
+          />
         </div>
         <div className="filter-group">
-          <label>Duración disponible (min) <span className="optional-mark">(opcional)</span></label>
-          <input type="number" value={targetDuration} onChange={(e) => setTargetDuration(e.target.value)} placeholder="45" />
+          <label>
+            Duración disponible (min) <span className="optional-mark">(opcional)</span>
+          </label>
+          <input
+            type="number"
+            value={targetDuration}
+            onChange={(e) => setTargetDuration(e.target.value)}
+            placeholder="45"
+          />
         </div>
       </div>
 
@@ -489,6 +862,12 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
         </div>
       </div>
 
+      {hasActivePickerFilter && (
+        <button className="account-btn" onClick={resetBuilderFilters} style={{ marginBottom: 10 }}>
+          Limpiar filtros
+        </button>
+      )}
+
       <div className="picker-grid">
         {!hasActivePickerFilter && (
           <div className="empty">Escribe una búsqueda o elige un filtro arriba para ver ejercicios aquí.</div>
@@ -516,7 +895,7 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
       )}
 
       <div className="session-items-list">
-        {renderGroups.map((g, gi) => {
+        {renderGroups.map((g) => {
           if (g.type === "single") {
             const item = g.item;
             const globalIndex = items.findIndex((i) => i.tempId === item.tempId);
@@ -537,7 +916,9 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
                   </div>
                 </div>
                 <div className="session-item-fields">
-                  <label>Series<input type="number" value={item.sets} onChange={(e) => updateItem(item.tempId, "sets", e.target.value)} /></label>
+                  <label>Series
+                    <input type="number" value={item.sets} onChange={(e) => updateItem(item.tempId, "sets", e.target.value)} />
+                  </label>
                   <label className="mode-toggle">
                     <select value={item.mode} onChange={(e) => updateItem(item.tempId, "mode", e.target.value)}>
                       <option value="reps">Repeticiones</option>
@@ -549,8 +930,12 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
                       <input type="number" value={item.duration_seconds} onChange={(e) => updateItem(item.tempId, "duration_seconds", e.target.value)} />
                     )}
                   </label>
-                  <label>Descanso (s)<input type="number" value={item.rest_seconds} onChange={(e) => updateItem(item.tempId, "rest_seconds", e.target.value)} /></label>
-                  <label>Carga / nota<input type="text" value={item.load_note} onChange={(e) => updateItem(item.tempId, "load_note", e.target.value)} placeholder="20kg, RIR 2..." /></label>
+                  <label>Descanso (s)
+                    <input type="number" value={item.rest_seconds} onChange={(e) => updateItem(item.tempId, "rest_seconds", e.target.value)} />
+                  </label>
+                  <label>Carga / nota
+                    <input type="text" value={item.load_note} onChange={(e) => updateItem(item.tempId, "load_note", e.target.value)} placeholder="20kg, RIR 2..." />
+                  </label>
                 </div>
               </div>
             );
@@ -560,7 +945,9 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
             <div className="session-group-editor" key={`group-${g.groupId}`}>
               <div className="session-group-editor-top">
                 <span>Circuito</span>
-                <label>Rondas <input type="number" value={g.items[0].sets} onChange={(e) => setGroupRounds(g.groupId, e.target.value)} /></label>
+                <label>Rondas
+                  <input type="number" value={g.items[0].sets} onChange={(e) => setGroupRounds(g.groupId, e.target.value)} />
+                </label>
                 <button className="account-btn" onClick={() => ungroup(g.groupId)}>Desagrupar</button>
               </div>
               {g.items.map((item) => {
@@ -587,7 +974,9 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
                           <input type="number" value={item.duration_seconds} onChange={(e) => updateItem(item.tempId, "duration_seconds", e.target.value)} />
                         )}
                       </label>
-                      <label>Carga / nota<input type="text" value={item.load_note} onChange={(e) => updateItem(item.tempId, "load_note", e.target.value)} /></label>
+                      <label>Carga / nota
+                        <input type="text" value={item.load_note} onChange={(e) => updateItem(item.tempId, "load_note", e.target.value)} />
+                      </label>
                     </div>
                   </div>
                 );
@@ -620,8 +1009,74 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
         disabled={!builderName.trim() || items.length === 0 || saving}
         onClick={saveRoutine}
       >
-        {saving ? "Guardando…" : "Guardar sesión"}
+        {saving ? "Guardando…" : editingRoutineId ? "Guardar cambios" : "Guardar sesión"}
       </button>
+    </div>
+  );
+}
+
+// Muestra una fecha del historial y, al desplegarla, lo que se registró ese día.
+function CompletionRow({ completion, onUndo }) {
+  const [open, setOpen] = useState(false);
+  const [logs, setLogs] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  async function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (next && logs === null) {
+      setLoading(true);
+      const { data } = await supabase
+        .from("exercise_set_logs")
+        .select("exercise_name, set_number, weight_kg, reps_done, duration_seconds")
+        .eq("completion_id", completion.id)
+        .order("set_number");
+      setLogs(data || []);
+      setLoading(false);
+    }
+  }
+
+  const grouped = useMemo(() => {
+    if (!logs) return [];
+    const map = new Map();
+    for (const l of logs) {
+      if (!map.has(l.exercise_name)) map.set(l.exercise_name, []);
+      map.get(l.exercise_name).push(l);
+    }
+    return [...map.entries()];
+  }, [logs]);
+
+  return (
+    <div className="completion-block">
+      <div className="completion-row">
+        <button className="completion-date-btn" onClick={toggle}>
+          {open ? "▾" : "▸"} {formatDate(completion.completed_at)}
+        </button>
+        <button className="account-btn" onClick={onUndo}>Deshacer</button>
+      </div>
+      {open && (
+        <div className="completion-detail">
+          {loading && <span className="training-lasttime">Cargando…</span>}
+          {!loading && grouped.length === 0 && (
+            <span className="training-lasttime">Sin series registradas ese día.</span>
+          )}
+          {!loading &&
+            grouped.map(([name, sets]) => (
+              <div className="completion-exercise" key={name}>
+                <span className="completion-exercise-name">{name}</span>
+                <span className="completion-sets">
+                  {sets
+                    .map((s) =>
+                      s.duration_seconds != null
+                        ? `${s.duration_seconds}s`
+                        : `${s.weight_kg != null ? s.weight_kg + "kg × " : ""}${s.reps_done ?? "?"}`
+                    )
+                    .join(" · ")}
+                </span>
+              </div>
+            ))}
+        </div>
+      )}
     </div>
   );
 }
