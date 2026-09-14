@@ -111,13 +111,38 @@ export default function HomePage() {
   const [modal, setModal] = useState(null); // { type: 'exercise'|'document', data }
 
   useEffect(() => {
-    async function loadData() {
-      setLoading(true);
-      setError(null);
-      const [exRes, docRes] = await Promise.all([
+    async function fetchAll() {
+      return Promise.all([
         supabase.from("exercises_full").select("*").order("name"),
         supabase.from("documents").select("*").order("created_at"),
       ]);
+    }
+
+    // Un token de sesión corrupto o con la hora desajustada hace que Supabase
+    // rechace TODAS las peticiones, incluidas las de datos públicos. En ese
+    // caso cerramos la sesión automáticamente y reintentamos como visitante,
+    // para que la persona pueda seguir usando la biblioteca en vez de quedarse
+    // ante una pantalla de error sin salida.
+    function isTokenProblem(msg) {
+      if (!msg) return false;
+      const m = msg.toLowerCase();
+      return m.includes("jwt") || m.includes("token") || m.includes("issued at");
+    }
+
+    async function loadData() {
+      setLoading(true);
+      setError(null);
+      let [exRes, docRes] = await fetchAll();
+
+      if (isTokenProblem(exRes.error?.message) || isTokenProblem(docRes.error?.message)) {
+        try {
+          await supabase.auth.signOut();
+        } catch (e) {
+          // Si ni siquiera se puede cerrar sesión limpiamente, seguimos igual:
+          // el reintento de abajo dirá si el problema persiste.
+        }
+        [exRes, docRes] = await fetchAll();
+      }
 
       if (exRes.error) {
         setError(exRes.error.message);
@@ -467,10 +492,11 @@ export default function HomePage() {
 
       {error && (
         <div className="error-state">
-          No se pudo conectar con la base de datos: {error}
+          No se pudieron cargar los datos: {error}
           <br />
-          Revisa que las variables NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY estén bien
-          configuradas, y que hayas ejecutado 12_create_exercise_view.sql en Supabase.
+          <br />
+          Prueba a recargar la página. Si el problema continúa, cierra sesión y vuelve a entrar, o abre la
+          aplicación en una ventana privada del navegador.
         </div>
       )}
 
