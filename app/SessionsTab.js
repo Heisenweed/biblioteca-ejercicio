@@ -113,6 +113,7 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
   const [fSearch, setFSearch] = useState("");
   const [items, setItems] = useState([]);
   const [selectedForGroup, setSelectedForGroup] = useState(new Set());
+  const [peekKey, setPeekKey] = useState(null); // qué ejercicio tiene la info desplegada
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
 
@@ -184,6 +185,10 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
   const hasActivePickerFilter = Boolean(
     fSearch.trim() || fCategory || fBodyRegion || fPattern || fMuscle || fEquip || fLevel || fObjective
   );
+
+  function togglePeek(key) {
+    setPeekKey((prev) => (prev === key ? null : key));
+  }
 
   function resetBuilderFilters() {
     setFCategory("");
@@ -717,13 +722,20 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
           {renderGroups.map((g, i) =>
             g.type === "single" ? (
               <div className="session-item-card" key={g.item.id || i}>
-                <div className="session-item-name">{g.item.exercise.name}</div>
+                <button
+                  className="exercise-peek-name session-item-name"
+                  onClick={() => togglePeek(`det-${g.item.id || i}`)}
+                >
+                  {g.item.exercise.name}
+                  <span className="peek-caret">{peekKey === `det-${g.item.id || i}` ? "▾" : "▸"}</span>
+                </button>
                 <div className="session-item-prescription">
                   {g.item.sets} × {g.item.reps || `${g.item.duration_seconds}s`}
                   {g.item.rest_seconds ? ` · descanso ${g.item.rest_seconds}s` : ""}
                   {g.item.load_note ? ` · ${g.item.load_note}` : ""}
                 </div>
                 {g.item.notes && <div className="session-item-notes">{g.item.notes}</div>}
+                {peekKey === `det-${g.item.id || i}` && <ExercisePeek exercise={g.item.exercise} />}
               </div>
             ) : (
               <div className="session-group-card" key={`g-${g.groupId}`}>
@@ -950,8 +962,14 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
         {hasActivePickerFilter &&
           filteredExercises.slice(0, 30).map((ex) => (
             <div className="picker-card" key={ex.id}>
-              <span>{ex.name}</span>
-              <button className="account-btn account-btn-primary" onClick={() => addExercise(ex)}>+ Añadir</button>
+              <div className="picker-card-row">
+                <button className="exercise-peek-name" onClick={() => togglePeek(`pick-${ex.id}`)}>
+                  {ex.name}
+                  <span className="peek-caret">{peekKey === `pick-${ex.id}` ? "▾" : "▸"}</span>
+                </button>
+                <button className="account-btn account-btn-primary" onClick={() => addExercise(ex)}>+ Añadir</button>
+              </div>
+              {peekKey === `pick-${ex.id}` && <ExercisePeek exercise={ex} />}
             </div>
           ))}
         {hasActivePickerFilter && filteredExercises.length === 0 && (
@@ -983,7 +1001,13 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
                     onChange={() => toggleSelectForGroup(item.tempId)}
                     title="Seleccionar para agrupar en circuito"
                   />
-                  <span className="session-item-name">{item.exercise.name}</span>
+                  <button
+                    className="exercise-peek-name session-item-name"
+                    onClick={() => togglePeek(`item-${item.tempId}`)}
+                  >
+                    {item.exercise.name}
+                    <span className="peek-caret">{peekKey === `item-${item.tempId}` ? "▾" : "▸"}</span>
+                  </button>
                   <div className="session-item-controls">
                     <button className="account-btn" onClick={() => moveItem(globalIndex, -1)}>↑</button>
                     <button className="account-btn" onClick={() => moveItem(globalIndex, 1)}>↓</button>
@@ -1012,6 +1036,7 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
                     <input type="text" value={item.load_note} onChange={(e) => updateItem(item.tempId, "load_note", e.target.value)} placeholder="20kg, RIR 2..." />
                   </label>
                 </div>
+                {peekKey === `item-${item.tempId}` && <ExercisePeek exercise={item.exercise} />}
               </div>
             );
           }
@@ -1292,6 +1317,54 @@ function SessionCalendar({ routines, onOpenRoutine }) {
       <button className="calendar-hide" onClick={() => setOpen(false)}>
         Ocultar calendario
       </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Resumen desplegable de un ejercicio, para consultarlo sin salir del
+// diseñador. Usa los datos ya cargados en memoria, no consulta nada nuevo.
+// ---------------------------------------------------------------------------
+function ExercisePeek({ exercise }) {
+  if (!exercise) return null;
+  const muscles = exercise.muscles || [];
+  const primary = muscles.filter((m) => m.involvement === "primary");
+  const secondary = muscles.filter((m) => m.involvement === "secondary");
+  const stabilizers = muscles.filter((m) => m.involvement === "stabilizer");
+
+  return (
+    <div className="exercise-peek">
+      {exercise.photo_url && (
+        <img src={exercise.photo_url} alt={exercise.name} className="exercise-peek-photo" loading="lazy" />
+      )}
+      {exercise.short_description && <p className="exercise-peek-desc">{exercise.short_description}</p>}
+
+      {primary.length > 0 && (
+        <div className="exercise-peek-row">
+          <span className="exercise-peek-label">Principal</span>
+          <span className="exercise-peek-muscles primary">{primary.map((m) => m.name).join(", ")}</span>
+        </div>
+      )}
+      {secondary.length > 0 && (
+        <div className="exercise-peek-row">
+          <span className="exercise-peek-label">Secundario</span>
+          <span className="exercise-peek-muscles">{secondary.map((m) => m.name).join(", ")}</span>
+        </div>
+      )}
+      {stabilizers.length > 0 && (
+        <div className="exercise-peek-row">
+          <span className="exercise-peek-label">Estabiliza</span>
+          <span className="exercise-peek-muscles">{stabilizers.map((m) => m.name).join(", ")}</span>
+        </div>
+      )}
+      {(exercise.equipment || []).length > 0 && (
+        <div className="exercise-peek-row">
+          <span className="exercise-peek-label">Material</span>
+          <span className="exercise-peek-muscles">
+            {exercise.equipment.map((eq) => eq.name).join(", ")}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

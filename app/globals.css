@@ -132,6 +132,33 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 .doc-meta { display: flex; gap: 8px; flex-shrink: 0; }
 
 /* ---- Calendario de sesiones ---- */
+/* ---- Resumen desplegable de ejercicio ---- */
+.picker-card { flex-direction: column; align-items: stretch; }
+.picker-card-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.exercise-peek-name {
+  background: none; border: none; color: var(--text); text-align: left; padding: 0;
+  font-family: 'Space Grotesk', sans-serif; font-size: 13.5px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 0;
+}
+.exercise-peek-name:hover { color: var(--accent); }
+.peek-caret { color: var(--text-muted); font-size: 9px; flex-shrink: 0; }
+.exercise-peek {
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.exercise-peek-photo {
+  width: 100%; max-width: 220px; aspect-ratio: 4/3; object-fit: contain;
+  border-radius: 6px; background: var(--surface-alt); align-self: center;
+}
+.exercise-peek-desc { font-size: 12.5px; color: var(--text-muted); margin: 0; line-height: 1.45; }
+.exercise-peek-row { display: flex; gap: 8px; align-items: baseline; font-size: 12px; }
+.exercise-peek-label {
+  font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; text-transform: uppercase;
+  color: var(--text-muted); min-width: 72px; flex-shrink: 0; letter-spacing: 0.04em;
+}
+.exercise-peek-muscles { color: var(--text-muted); }
+.exercise-peek-muscles.primary { color: var(--accent); }
+
 .field-hint {
   font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--accent); margin-top: 2px;
 }
