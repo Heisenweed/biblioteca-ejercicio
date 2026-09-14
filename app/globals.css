@@ -134,29 +134,29 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 /* ---- Calendario de sesiones ---- */
 .calendar-card {
   background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-  padding: 16px; margin-bottom: 18px;
+  padding: 12px 14px; margin-bottom: 18px; max-width: 300px;
 }
-.calendar-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.calendar-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .calendar-title {
-  font-family: 'Space Grotesk', sans-serif; font-size: 15px; text-transform: capitalize;
+  font-family: 'Space Grotesk', sans-serif; font-size: 13px; text-transform: capitalize;
 }
 .calendar-nav {
   background: var(--surface-alt); border: 1px solid var(--border); color: var(--text);
-  border-radius: 6px; width: 32px; height: 30px; font-size: 16px; cursor: pointer; line-height: 1;
+  border-radius: 5px; width: 24px; height: 22px; font-size: 13px; cursor: pointer; line-height: 1; padding: 0;
 }
 .calendar-nav:hover { border-color: var(--text-muted); }
 .calendar-weekdays, .calendar-grid {
-  display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
 }
 .calendar-weekdays {
-  margin-bottom: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+  margin-bottom: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 9px;
   color: var(--text-muted); text-align: center;
 }
 .calendar-cell {
-  position: relative; aspect-ratio: 1; background: none; border: 1px solid transparent;
-  border-radius: 6px; color: var(--text-muted); font-family: 'IBM Plex Mono', monospace;
-  font-size: 12px; display: flex; flex-direction: column; align-items: center;
-  justify-content: center; gap: 3px; cursor: default; padding: 0;
+  position: relative; height: 30px; background: none; border: 1px solid transparent;
+  border-radius: 4px; color: var(--text-muted); font-family: 'IBM Plex Mono', monospace;
+  font-size: 10.5px; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 2px; cursor: default; padding: 0;
 }
 .calendar-cell.empty-cell { border: none; }
 .calendar-cell.has-session { color: var(--text); background: var(--surface-alt); cursor: pointer; }
