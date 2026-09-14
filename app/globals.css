@@ -131,6 +131,57 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 .doc-card p { color: var(--text-muted); font-size: 13.5px; line-height: 1.5; margin: 0; }
 .doc-meta { display: flex; gap: 8px; flex-shrink: 0; }
 
+/* ---- Calendario de sesiones ---- */
+.calendar-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px; margin-bottom: 18px;
+}
+.calendar-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.calendar-title {
+  font-family: 'Space Grotesk', sans-serif; font-size: 15px; text-transform: capitalize;
+}
+.calendar-nav {
+  background: var(--surface-alt); border: 1px solid var(--border); color: var(--text);
+  border-radius: 6px; width: 32px; height: 30px; font-size: 16px; cursor: pointer; line-height: 1;
+}
+.calendar-nav:hover { border-color: var(--text-muted); }
+.calendar-weekdays, .calendar-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+}
+.calendar-weekdays {
+  margin-bottom: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+  color: var(--text-muted); text-align: center;
+}
+.calendar-cell {
+  position: relative; aspect-ratio: 1; background: none; border: 1px solid transparent;
+  border-radius: 6px; color: var(--text-muted); font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 3px; cursor: default; padding: 0;
+}
+.calendar-cell.empty-cell { border: none; }
+.calendar-cell.has-session { color: var(--text); background: var(--surface-alt); cursor: pointer; }
+.calendar-cell.has-session:hover { border-color: var(--accent-dim); }
+.calendar-cell.is-today { border-color: var(--text-muted); }
+.calendar-cell.is-selected { border-color: var(--accent); background: rgba(198,241,53,0.12); }
+.calendar-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.calendar-footer {
+  margin-top: 12px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-muted);
+  text-align: center;
+}
+.calendar-daydetail {
+  margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.calendar-daydetail-date {
+  font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-muted);
+  text-transform: capitalize;
+}
+.calendar-session-link {
+  background: none; border: none; color: var(--accent); text-align: left; padding: 0;
+  font-family: 'Inter', sans-serif; font-size: 13.5px; cursor: pointer;
+}
+.calendar-session-link:hover { text-decoration: underline; }
+
 .completion-history { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 18px; }
 
 /* ---- Acciones de detalle y edición ---- */

@@ -708,6 +708,15 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
         <p className="docs-intro">
           Diseña tus propias sesiones eligiendo ejercicios de la biblioteca, entrénalas y registra lo que haces.
         </p>
+
+        <SessionCalendar
+          routines={routines}
+          onOpenRoutine={(routineId) => {
+            const r = routines.find((x) => x.id === routineId);
+            if (r) openDetail(r);
+          }}
+        />
+
         <button className="account-btn account-btn-primary" onClick={startNewSession} style={{ marginBottom: 18 }}>
           + Nueva sesión
         </button>
@@ -1075,6 +1084,133 @@ function CompletionRow({ completion, onUndo }) {
                 </span>
               </div>
             ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Calendario mensual de sesiones realizadas.
+// No consulta nada nuevo: se construye a partir de las rutinas ya cargadas,
+// que traen sus propias marcas de sesión completada.
+// ---------------------------------------------------------------------------
+const WEEKDAYS = ["L", "M", "X", "J", "V", "S", "D"];
+const MONTH_NAMES = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+function toDayKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function SessionCalendar({ routines, onOpenRoutine }) {
+  const [cursor, setCursor] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
+  });
+  const [selectedDay, setSelectedDay] = useState(null);
+
+  // Mapa: "2026-09-14" -> [{ routineId, routineName }]
+  const byDay = useMemo(() => {
+    const map = {};
+    for (const r of routines) {
+      for (const c of r.routine_completions || []) {
+        const key = toDayKey(new Date(c.completed_at));
+        if (!map[key]) map[key] = [];
+        map[key].push({ routineId: r.id, routineName: r.name });
+      }
+    }
+    return map;
+  }, [routines]);
+
+  const totalCompletions = useMemo(
+    () => Object.values(byDay).reduce((sum, arr) => sum + arr.length, 0),
+    [byDay]
+  );
+
+  const grid = useMemo(() => {
+    const first = new Date(cursor.year, cursor.month, 1);
+    const daysInMonth = new Date(cursor.year, cursor.month + 1, 0).getDate();
+    // getDay(): 0 = domingo. Lo convertimos a semana que empieza en lunes.
+    const leading = (first.getDay() + 6) % 7;
+    const cells = [];
+    for (let i = 0; i < leading; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(cursor.year, cursor.month, d));
+    return cells;
+  }, [cursor]);
+
+  function shiftMonth(delta) {
+    setSelectedDay(null);
+    setCursor((prev) => {
+      const d = new Date(prev.year, prev.month + delta, 1);
+      return { year: d.getFullYear(), month: d.getMonth() };
+    });
+  }
+
+  const todayKey = toDayKey(new Date());
+  const monthCount = grid.filter((d) => d && byDay[toDayKey(d)]).length;
+
+  if (totalCompletions === 0) return null;
+
+  return (
+    <div className="calendar-card">
+      <div className="calendar-head">
+        <button className="calendar-nav" onClick={() => shiftMonth(-1)} aria-label="Mes anterior">‹</button>
+        <span className="calendar-title">
+          {MONTH_NAMES[cursor.month]} {cursor.year}
+        </span>
+        <button className="calendar-nav" onClick={() => shiftMonth(1)} aria-label="Mes siguiente">›</button>
+      </div>
+
+      <div className="calendar-weekdays">
+        {WEEKDAYS.map((w, i) => (
+          <span key={i}>{w}</span>
+        ))}
+      </div>
+
+      <div className="calendar-grid">
+        {grid.map((day, i) => {
+          if (!day) return <span className="calendar-cell empty-cell" key={`e-${i}`} />;
+          const key = toDayKey(day);
+          const sessions = byDay[key];
+          const isToday = key === todayKey;
+          const isSelected = selectedDay === key;
+          return (
+            <button
+              key={key}
+              className={`calendar-cell ${sessions ? "has-session" : ""} ${isToday ? "is-today" : ""} ${isSelected ? "is-selected" : ""}`}
+              onClick={() => setSelectedDay(sessions ? (isSelected ? null : key) : null)}
+              disabled={!sessions}
+            >
+              <span className="calendar-daynum">{day.getDate()}</span>
+              {sessions && <span className="calendar-dot" />}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="calendar-footer">
+        {monthCount > 0
+          ? `${monthCount} ${monthCount === 1 ? "día entrenado" : "días entrenados"} este mes`
+          : "Sin sesiones registradas este mes"}
+      </div>
+
+      {selectedDay && byDay[selectedDay] && (
+        <div className="calendar-daydetail">
+          <div className="calendar-daydetail-date">
+            {new Date(selectedDay + "T12:00:00").toLocaleDateString("es-ES", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+            })}
+          </div>
+          {byDay[selectedDay].map((s, i) => (
+            <button className="calendar-session-link" key={i} onClick={() => onOpenRoutine(s.routineId)}>
+              ▸ {s.routineName}
+            </button>
+          ))}
         </div>
       )}
     </div>
