@@ -132,6 +132,25 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 .doc-meta { display: flex; gap: 8px; flex-shrink: 0; }
 
 /* ---- Calendario de sesiones ---- */
+/* ---- Pregunta previa al entrenar ---- */
+.training-ask {
+  background: var(--surface); border: 1px solid var(--accent); border-radius: 10px;
+  padding: 16px 18px; margin-bottom: 18px;
+}
+.training-ask-title {
+  font-family: 'Space Grotesk', sans-serif; font-size: 15px; margin-bottom: 6px;
+}
+.training-ask-text {
+  font-size: 13.5px; color: var(--text-muted); margin: 0 0 14px; line-height: 1.5;
+}
+.training-ask-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.training-ask-cancel {
+  background: none; border: none; color: var(--text-muted); cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; padding: 8px 0 0;
+  text-decoration: underline;
+}
+.training-ask-cancel:hover { color: var(--text); }
+
 /* ---- Resumen desplegable de ejercicio ---- */
 .picker-card { flex-direction: column; align-items: stretch; }
 .picker-card-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
@@ -139,6 +158,7 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   background: none; border: none; color: var(--text); text-align: left; padding: 0;
   font-family: 'Space Grotesk', sans-serif; font-size: 13.5px; cursor: pointer;
   display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 0;
+  white-space: normal; overflow-wrap: anywhere; line-height: 1.35;
 }
 .exercise-peek-name:hover { color: var(--accent); }
 .peek-caret { color: var(--text-muted); font-size: 9px; flex-shrink: 0; }
@@ -323,6 +343,50 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   }
   .detail-actions button {
     flex: 1 1 auto;
+  }
+
+  /* La fila de cada ejercicio del diseñador se apila: nombre arriba,
+     botones de control debajo, para que no se aplasten entre sí. */
+  .session-item-editor-top {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .session-item-editor-top .exercise-peek-name {
+    flex: 1 1 100%;
+    order: -1;
+  }
+  .session-item-controls {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+  }
+  .session-item-fields label {
+    flex: 1 1 calc(50% - 6px);
+    min-width: 0;
+  }
+  .mode-toggle {
+    flex: 1 1 100%;
+  }
+
+  /* En el resumen, la etiqueta va encima del valor en vez de al lado. */
+  .exercise-peek-row {
+    flex-direction: column;
+    gap: 2px;
+  }
+  .exercise-peek-label {
+    min-width: 0;
+  }
+  .exercise-peek-photo {
+    max-width: 100%;
+  }
+  .picker-card-row {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .picker-card-row .exercise-peek-name {
+    flex: 1 1 100%;
+  }
+  .picker-card-row .account-btn {
+    margin-left: auto;
   }
 }
 

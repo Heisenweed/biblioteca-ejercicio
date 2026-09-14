@@ -118,6 +118,7 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
   const [saveError, setSaveError] = useState(null);
 
   // ---- Modo entrenamiento ----
+  const [askTrainingMode, setAskTrainingMode] = useState(null); // rutina pendiente de elegir modo
   const [trainingRoutine, setTrainingRoutine] = useState(null);
   const [trainingLog, setTrainingLog] = useState([]); // [{exerciseId, name, mode, sets:[{weight,reps,duration,done}], lastTime}]
   const [trainingLoading, setTrainingLoading] = useState(false);
@@ -415,7 +416,26 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
   // ------------------------------------------------------------------
   // MODO ENTRENAMIENTO
   // ------------------------------------------------------------------
+  // Marca la sesión como realizada sin abrir el registro de cargas, para quien
+  // prefiere un seguimiento simple.
+  async function markDoneWithoutLogging(routine) {
+    const { data, error } = await supabase
+      .from("routine_completions")
+      .insert({ routine_id: routine.id, user_id: user.id })
+      .select()
+      .single();
+    setAskTrainingMode(null);
+    if (error) return;
+    const updateWith = (r) =>
+      r.id === routine.id
+        ? { ...r, routine_completions: [...(r.routine_completions || []), data] }
+        : r;
+    setRoutines((prev) => prev.map(updateWith));
+    setDetailRoutine((prev) => (prev && prev.id === routine.id ? updateWith(prev) : prev));
+  }
+
   async function startTraining(routine) {
+    setAskTrainingMode(null);
     setTrainingRoutine(routine);
     setTrainingError(null);
     setTrainingLoading(true);
@@ -693,8 +713,17 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
           <p className="docs-intro">Duración prevista: {detailRoutine.target_duration_minutes} min</p>
         )}
 
+        {askTrainingMode && (
+          <TrainingModeAsk
+            routine={askTrainingMode}
+            onCancel={() => setAskTrainingMode(null)}
+            onWithLog={() => startTraining(askTrainingMode)}
+            onWithoutLog={() => markDoneWithoutLogging(askTrainingMode)}
+          />
+        )}
+
         <div className="detail-actions">
-          <button className="account-btn account-btn-primary" onClick={() => startTraining(detailRoutine)}>
+          <button className="account-btn account-btn-primary" onClick={() => setAskTrainingMode(detailRoutine)}>
             ▶ Entrenar ahora
           </button>
           <button className="account-btn" onClick={() => startEditSession(detailRoutine)}>
@@ -768,6 +797,15 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
           Diseña tus propias sesiones eligiendo ejercicios de la biblioteca, entrénalas y registra lo que haces.
         </p>
 
+        {askTrainingMode && (
+          <TrainingModeAsk
+            routine={askTrainingMode}
+            onCancel={() => setAskTrainingMode(null)}
+            onWithLog={() => startTraining(askTrainingMode)}
+            onWithoutLog={() => markDoneWithoutLogging(askTrainingMode)}
+          />
+        )}
+
         <SessionCalendar
           routines={routines}
           onOpenRoutine={(routineId) => {
@@ -798,7 +836,7 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
                       className="account-btn account-btn-primary"
                       onClick={(e) => {
                         e.stopPropagation();
-                        startTraining(r);
+                        setAskTrainingMode(r);
                       }}
                     >
                       ▶ Entrenar
@@ -1365,6 +1403,34 @@ function ExercisePeek({ exercise }) {
           </span>
         </div>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Pregunta previa al entrenar: registrar cargas o solo marcar como hecha.
+// El registro detallado es potente pero puede resultar invasivo si solo
+// quieres dejar constancia de que entrenaste, así que se elige cada vez.
+// ---------------------------------------------------------------------------
+function TrainingModeAsk({ routine, onCancel, onWithLog, onWithoutLog }) {
+  return (
+    <div className="training-ask">
+      <div className="training-ask-title">{routine.name}</div>
+      <p className="training-ask-text">
+        ¿Quieres anotar las cargas y repeticiones de cada serie para poder hacer un seguimiento de tu
+        progresión?
+      </p>
+      <div className="training-ask-actions">
+        <button className="account-btn account-btn-primary" onClick={onWithLog}>
+          Sí, registrar mi entrenamiento
+        </button>
+        <button className="account-btn" onClick={onWithoutLog}>
+          No, solo marcar como hecha
+        </button>
+      </div>
+      <button className="training-ask-cancel" onClick={onCancel}>
+        Cancelar
+      </button>
     </div>
   );
 }
