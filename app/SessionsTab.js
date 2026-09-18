@@ -14,6 +14,59 @@ const CATEGORY_NAMES = {
   conditioning: "Acondicionamiento",
 };
 
+// ---------------------------------------------------------------------------
+// Generador automático de sesiones.
+// Los patrones se listan por prioridad: primero los poliarticulares grandes,
+// que dan más rendimiento por minuto, y luego accesorios. Es el mismo criterio
+// que explica el artículo "Cómo elegir tus ejercicios y estructurar una sesión".
+// ---------------------------------------------------------------------------
+const ZONE_PATTERNS = {
+  "Cuerpo completo": [
+    "Sentadilla (squat)", "Empuje horizontal", "Tracción horizontal", "Bisagra de cadera (hinge)",
+    "Empuje vertical", "Tracción vertical", "Core anti-extensión", "Zancada (lunge)",
+    "Core anti-rotación", "Flexión de codo", "Extensión de codo",
+  ],
+  "Tren superior": [
+    "Empuje horizontal", "Tracción horizontal", "Empuje vertical", "Tracción vertical",
+    "Flexión de codo", "Extensión de codo", "Abducción de hombro", "Flexión de hombro",
+  ],
+  "Tren inferior": [
+    "Sentadilla (squat)", "Bisagra de cadera (hinge)", "Zancada (lunge)",
+    "Extensión de rodilla", "Flexión de rodilla", "Flexión plantar de tobillo",
+    "Abducción de cadera", "Aducción de cadera", "Extensión de cadera (aislada)",
+  ],
+  "Core": [
+    "Core anti-extensión", "Core anti-rotación", "Rotación de core",
+    "Core anti-flexión lateral", "Flexión de tronco",
+  ],
+};
+
+// Prescripción según objetivo. Los rangos siguen las referencias habituales de
+// la literatura y coinciden con lo que explican los artículos de la app.
+const OBJECTIVE_PRESCRIPTION = {
+  "Fuerza máxima": { sets: 4, reps: "4-6", rest: 180 },
+  "Hipertrofia": { sets: 4, reps: "8-12", rest: 90 },
+  "Potencia": { sets: 4, reps: "3-5", rest: 150 },
+  "Resistencia muscular": { sets: 3, reps: "15-20", rest: 45 },
+  "Movilidad": { sets: 2, reps: "8-10", rest: 30 },
+  "Estabilidad / control motor": { sets: 3, mode: "time", duration: 30, rest: 45 },
+  "Coordinación": { sets: 3, reps: "8-10", rest: 60 },
+  "Rehabilitación / prevención": { sets: 3, reps: "12-15", rest: 45 },
+};
+
+const LEVEL_ORDER = { beginner: 0, intermediate: 1, advanced: 2 };
+
+// Cuántos ejercicios caben según el tiempo disponible, contando series y
+// descansos. Es una estimación deliberadamente conservadora.
+function slotsForMinutes(minutes) {
+  const m = Number(minutes) || 45;
+  if (m <= 15) return 3;
+  if (m <= 30) return 5;
+  if (m <= 45) return 7;
+  if (m <= 60) return 8;
+  return 10;
+}
+
 // Misma lógica de coincidencia que la biblioteca, para que el diseñador se
 // comporte exactamente igual que la pestaña principal.
 function matchesPickerFilters(e, f) {
@@ -101,6 +154,13 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
   const [routinesLoading, setRoutinesLoading] = useState(false);
   const [detailRoutine, setDetailRoutine] = useState(null);
   const [routineSearch, setRoutineSearch] = useState("");
+  const [genZone, setGenZone] = useState("Cuerpo completo");
+  const [genTime, setGenTime] = useState("45");
+  const [genLevel, setGenLevel] = useState("beginner");
+  const [genEquip, setGenEquip] = useState([]);
+  const [genObjective, setGenObjective] = useState("Hipertrofia");
+  const [genMode, setGenMode] = useState("equilibrada");
+  const [genError, setGenError] = useState(null);
   const [routineSort, setRoutineSort] = useState("recientes");
 
   // ---- Constructor ----
@@ -245,6 +305,125 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
       });
     setItems(loaded);
     setView("builder");
+  }
+
+  // Lista completa de equipamiento disponible en la biblioteca, para el
+  // cuestionario del generador.
+  const allEquipOptions = useMemo(
+    () => unique(exercises.flatMap((e) => (e.equipment || []).map((eq) => eq.name))),
+    [exercises]
+  );
+
+  function toggleGenEquip(name) {
+    setGenEquip((prev) => (prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name]));
+  }
+
+  function generateSession() {
+    setGenError(null);
+
+    // 1. Ejercicios candidatos: nivel igual o inferior al elegido, material
+    //    disponible, y solo de fuerza o acondicionamiento (los estiramientos
+    //    y la movilidad se añaden a mano si se quieren).
+    const maxLevel = LEVEL_ORDER[genLevel];
+    const pool = exercises.filter((e) => {
+      if (LEVEL_ORDER[e.level] > maxLevel) return false;
+      if (genObjective === "Movilidad") {
+        if (!["stretch_dynamic", "stretch_static_active"].includes(e.category)) return false;
+      } else if (!["strength", "conditioning"].includes(e.category)) {
+        return false;
+      }
+      if (genEquip.length > 0) {
+        const req = (e.equipment || []).filter((eq) => eq.required !== false).map((eq) => eq.name);
+        // Todo el material obligatorio del ejercicio debe estar disponible.
+        if (req.length > 0 && !req.every((r) => genEquip.includes(r))) return false;
+      }
+      return true;
+    });
+
+    if (pool.length === 0) {
+      setGenError("No hay ejercicios que encajen con esas condiciones. Prueba a añadir más material o a subir el nivel.");
+      return;
+    }
+
+    const slots = slotsForMinutes(genTime);
+    const chosen = [];
+    const usedIds = new Set();
+
+    // Ordena candidatos: primero poliarticulares (más rendimiento por minuto),
+    // y con algo de aleatoriedad para que dos sesiones seguidas no sean iguales.
+    const rank = (a, b) => {
+      if (a.joint_type !== b.joint_type) return a.joint_type === "poly_articular" ? -1 : 1;
+      return Math.random() - 0.5;
+    };
+
+    if (genMode === "equilibrada") {
+      const patterns = ZONE_PATTERNS[genZone] || ZONE_PATTERNS["Cuerpo completo"];
+      // Una pasada por patrón en orden de prioridad, hasta llenar los huecos.
+      for (const pattern of patterns) {
+        if (chosen.length >= slots) break;
+        const candidates = pool
+          .filter((e) => !usedIds.has(e.id) && (e.patterns || []).includes(pattern))
+          .sort(rank);
+        if (candidates.length > 0) {
+          chosen.push(candidates[0]);
+          usedIds.add(candidates[0].id);
+        }
+      }
+      // Si aún quedan huecos, se rellenan con lo mejor disponible de la zona.
+      if (chosen.length < slots) {
+        const zonePatterns = new Set(patterns);
+        const extra = pool
+          .filter((e) => !usedIds.has(e.id) && (e.patterns || []).some((p) => zonePatterns.has(p)))
+          .sort(rank);
+        for (const e of extra) {
+          if (chosen.length >= slots) break;
+          chosen.push(e);
+          usedIds.add(e.id);
+        }
+      }
+    } else {
+      // Modo enfocado: todo lo que encaje en la zona, sin repartir por patrón.
+      const zonePatterns = new Set(ZONE_PATTERNS[genZone] || []);
+      const candidates = pool
+        .filter((e) => (e.patterns || []).some((p) => zonePatterns.has(p)))
+        .sort(rank);
+      for (const e of candidates) {
+        if (chosen.length >= slots) break;
+        chosen.push(e);
+        usedIds.add(e.id);
+      }
+    }
+
+    if (chosen.length === 0) {
+      setGenError("No se han encontrado ejercicios para esa combinación. Prueba con otra zona o añade material.");
+      return;
+    }
+
+    // 2. Prescripción según el objetivo elegido.
+    const pres = OBJECTIVE_PRESCRIPTION[genObjective] || OBJECTIVE_PRESCRIPTION["Hipertrofia"];
+    const built = chosen.map((ex) => ({
+      tempId: newTempId(),
+      exercise: ex,
+      mode: pres.mode === "time" ? "time" : "reps",
+      sets: pres.sets,
+      reps: pres.reps || "10",
+      duration_seconds: pres.duration || 30,
+      rest_seconds: pres.rest,
+      load_note: "",
+      notes: "",
+      superset_group: null,
+    }));
+
+    // 3. Se abre en el diseñador, editable y sin guardar nada todavía.
+    setEditingRoutineId(null);
+    setBuilderName(`${genZone} · ${genObjective} · ${genTime} min`);
+    setTargetDuration(genTime);
+    resetBuilderFilters();
+    setSelectedForGroup(new Set());
+    setSaveError(null);
+    setItems(built);
+    setView("builder");
+    toast(`Sesión generada con ${built.length} ejercicios`);
   }
 
   function addExercise(ex) {
@@ -797,6 +976,126 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
     );
   }
 
+  // ---------------- VISTA: GENERADOR ----------------
+  if (view === "generator") {
+    // Por defecto, "cuerpo completo" se reparte por patrones y una zona
+    // concreta se enfoca. El usuario puede cambiarlo.
+    const suggestedMode = genZone === "Cuerpo completo" ? "equilibrada" : "enfocada";
+
+    return (
+      <div className="session-builder">
+        <button className="account-btn" onClick={() => setView("list")}>← Cancelar</button>
+
+        <h2 className="session-detail-title">Generar una sesión</h2>
+        <p className="docs-intro">
+          Responde estas preguntas y se construirá una sesión con los ejercicios de la biblioteca. Podrás
+          editarla por completo antes de guardarla: nada se guarda hasta que tú lo decidas.
+        </p>
+
+        <div className="filters">
+          <div className="filter-group">
+            <label>Qué quieres trabajar</label>
+            <select
+              value={genZone}
+              onChange={(e) => {
+                setGenZone(e.target.value);
+                setGenMode(e.target.value === "Cuerpo completo" ? "equilibrada" : "enfocada");
+              }}
+            >
+              <option value="Cuerpo completo">Cuerpo completo</option>
+              <option value="Tren superior">Tren superior</option>
+              <option value="Tren inferior">Tren inferior</option>
+              <option value="Core">Core</option>
+            </select>
+          </div>
+          <div className="filter-group">
+            <label>Tiempo disponible</label>
+            <select value={genTime} onChange={(e) => setGenTime(e.target.value)}>
+              <option value="15">15 minutos</option>
+              <option value="30">30 minutos</option>
+              <option value="45">45 minutos</option>
+              <option value="60">60 minutos</option>
+              <option value="75">75 minutos</option>
+            </select>
+          </div>
+          <div className="filter-group">
+            <label>Tu nivel</label>
+            <select value={genLevel} onChange={(e) => setGenLevel(e.target.value)}>
+              <option value="beginner">Principiante</option>
+              <option value="intermediate">Intermedio</option>
+              <option value="advanced">Avanzado</option>
+            </select>
+          </div>
+          <div className="filter-group">
+            <label>Objetivo</label>
+            <select value={genObjective} onChange={(e) => setGenObjective(e.target.value)}>
+              {Object.keys(OBJECTIVE_PRESCRIPTION).map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="section-label">Cómo repartir el trabajo</div>
+        <div className="gen-mode-row">
+          <label className={`gen-mode-option ${genMode === "equilibrada" ? "active" : ""}`}>
+            <input
+              type="radio"
+              name="genmode"
+              checked={genMode === "equilibrada"}
+              onChange={() => setGenMode("equilibrada")}
+            />
+            <span>
+              <strong>Equilibrada</strong>
+              <em>Cubre los patrones fundamentales de la zona: empuje, tracción, sentadilla, bisagra, core.</em>
+            </span>
+          </label>
+          <label className={`gen-mode-option ${genMode === "enfocada" ? "active" : ""}`}>
+            <input
+              type="radio"
+              name="genmode"
+              checked={genMode === "enfocada"}
+              onChange={() => setGenMode("enfocada")}
+            />
+            <span>
+              <strong>Enfocada</strong>
+              <em>Solo lo que has pedido, sin repartir entre patrones.</em>
+            </span>
+          </label>
+        </div>
+        {genMode !== suggestedMode && (
+          <p className="chart-caption" style={{ textAlign: "left" }}>
+            Para “{genZone}” lo habitual sería el reparto <strong>{suggestedMode}</strong>, pero puedes
+            hacerlo como prefieras.
+          </p>
+        )}
+
+        <div className="section-label">Material disponible</div>
+        <p className="chart-caption" style={{ textAlign: "left", marginTop: 0 }}>
+          Marca lo que tengas. Si no marcas nada, se usará toda la biblioteca sin restricción de material.
+        </p>
+        <div className="gen-equip-grid">
+          {allEquipOptions.map((eq) => (
+            <label key={eq} className={`gen-equip-chip ${genEquip.includes(eq) ? "active" : ""}`}>
+              <input type="checkbox" checked={genEquip.includes(eq)} onChange={() => toggleGenEquip(eq)} />
+              {eq}
+            </label>
+          ))}
+        </div>
+
+        {genError && <p className="auth-error">{genError}</p>}
+
+        <button
+          className="account-btn account-btn-primary"
+          style={{ marginTop: 20, width: "100%" }}
+          onClick={generateSession}
+        >
+          ⚡ Generar sesión
+        </button>
+      </div>
+    );
+  }
+
   // ---------------- VISTA: LISTA ----------------
   if (view === "list") {
     const q = routineSearch.trim().toLowerCase();
@@ -836,9 +1135,14 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
           }}
         />
 
-        <button className="account-btn account-btn-primary" onClick={startNewSession} style={{ marginBottom: 18 }}>
-          + Nueva sesión
-        </button>
+        <div className="list-actions">
+          <button className="account-btn account-btn-primary" onClick={startNewSession}>
+            + Nueva sesión
+          </button>
+          <button className="account-btn" onClick={() => { setGenError(null); setView("generator"); }}>
+            ⚡ Generar sesión automáticamente
+          </button>
+        </div>
         {routines.length > 2 && (
           <div className="filters" style={{ marginBottom: 4 }}>
             <div className="filter-group">
