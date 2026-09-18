@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { useToast } from "../lib/ToastContext";
 
 const LEVEL_NAMES = { beginner: "Principiante", intermediate: "Intermedio", advanced: "Avanzado" };
 
@@ -94,10 +95,13 @@ function estimateTotalMinutes(items) {
 }
 
 export default function SessionsTab({ user, exercises, onRequestLogin }) {
+  const toast = useToast();
   const [view, setView] = useState("list"); // 'list' | 'builder' | 'detail' | 'training'
   const [routines, setRoutines] = useState([]);
   const [routinesLoading, setRoutinesLoading] = useState(false);
   const [detailRoutine, setDetailRoutine] = useState(null);
+  const [routineSearch, setRoutineSearch] = useState("");
+  const [routineSort, setRoutineSort] = useState("recientes");
 
   // ---- Constructor ----
   const [editingRoutineId, setEditingRoutineId] = useState(null);
@@ -385,6 +389,7 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
       if (itemsError) throw itemsError;
 
       setSaving(false);
+      toast(editingRoutineId ? "Cambios guardados" : "Sesión guardada");
       setEditingRoutineId(null);
       setView("list");
     } catch (err) {
@@ -396,6 +401,7 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
   async function deleteRoutine(id) {
     await supabase.from("routines").delete().eq("id", id);
     setRoutines((prev) => prev.filter((r) => r.id !== id));
+    toast("Sesión eliminada");
   }
 
   async function undoCompletion(completionId, routineId) {
@@ -432,6 +438,7 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
         : r;
     setRoutines((prev) => prev.map(updateWith));
     setDetailRoutine((prev) => (prev && prev.id === routine.id ? updateWith(prev) : prev));
+    toast("Sesión marcada como hecha");
   }
 
   async function startTraining(routine) {
@@ -574,6 +581,7 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
       }
 
       setFinishing(false);
+      toast(rows.length ? `Entrenamiento guardado · ${rows.length} series` : "Sesión marcada como hecha");
       setTrainingRoutine(null);
       setTrainingLog([]);
       setView("list");
@@ -791,6 +799,20 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
 
   // ---------------- VISTA: LISTA ----------------
   if (view === "list") {
+    const q = routineSearch.trim().toLowerCase();
+    const lastDoneAt = (r) => {
+      const cs = r.routine_completions || [];
+      if (!cs.length) return 0;
+      return Math.max(...cs.map((c) => new Date(c.completed_at).getTime()));
+    };
+    const visibleRoutines = routines
+      .filter((r) => !q || (r.name || "").toLowerCase().includes(q))
+      .sort((a, b) => {
+        if (routineSort === "alfabetico") return (a.name || "").localeCompare(b.name || "", "es");
+        if (routineSort === "hechas") return lastDoneAt(b) - lastDoneAt(a);
+        return new Date(b.created_at) - new Date(a.created_at);
+      });
+
     return (
       <div className="sessions-list-view">
         <p className="docs-intro">
@@ -817,12 +839,37 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
         <button className="account-btn account-btn-primary" onClick={startNewSession} style={{ marginBottom: 18 }}>
           + Nueva sesión
         </button>
+        {routines.length > 2 && (
+          <div className="filters" style={{ marginBottom: 4 }}>
+            <div className="filter-group">
+              <label>Buscar sesión</label>
+              <input
+                type="text"
+                placeholder="Nombre de la sesión…"
+                value={routineSearch}
+                onChange={(e) => setRoutineSearch(e.target.value)}
+              />
+            </div>
+            <div className="filter-group">
+              <label>Ordenar por</label>
+              <select value={routineSort} onChange={(e) => setRoutineSort(e.target.value)}>
+                <option value="recientes">Creadas más recientemente</option>
+                <option value="hechas">Realizadas más recientemente</option>
+                <option value="alfabetico">Nombre (A-Z)</option>
+              </select>
+            </div>
+          </div>
+        )}
+
         {routinesLoading && <div className="loading-state">Cargando tus sesiones…</div>}
         {!routinesLoading && routines.length === 0 && (
           <div className="empty">Todavía no has guardado ninguna sesión.</div>
         )}
+        {!routinesLoading && routines.length > 0 && visibleRoutines.length === 0 && (
+          <div className="empty">Ninguna sesión coincide con esa búsqueda.</div>
+        )}
         <div className="docs-list">
-          {routines.map((r) => {
+          {visibleRoutines.map((r) => {
             const completions = r.routine_completions || [];
             const last = completions.length
               ? [...completions].sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at))[0]

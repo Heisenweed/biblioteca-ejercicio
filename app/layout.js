@@ -1,5 +1,6 @@
 import "./globals.css";
 import { AuthProvider } from "../lib/AuthContext";
+import { ToastProvider } from "../lib/ToastContext";
 
 export const metadata = {
   title: "Biblioteca de ejercicios",
@@ -17,7 +18,9 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </AuthProvider>
       </body>
     </html>
   );

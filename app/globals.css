@@ -132,6 +132,40 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 .doc-meta { display: flex; gap: 8px; flex-shrink: 0; }
 
 /* ---- Calendario de sesiones ---- */
+/* ---- Avisos flotantes ---- */
+.toast-stack {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; gap: 8px; z-index: 200; align-items: center;
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto; background: var(--surface); border: 1px solid var(--accent);
+  color: var(--text); border-radius: 100px; padding: 11px 20px; font-size: 13.5px;
+  font-family: 'Inter', sans-serif; cursor: pointer; max-width: 90vw;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.4); animation: toast-in 0.22s ease-out;
+}
+.toast-error { border-color: var(--danger); }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- Pie de página ---- */
+.site-footer {
+  margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--border); text-align: center;
+}
+.footer-link {
+  background: none; border: none; color: var(--text-muted); cursor: pointer;
+  font-family: 'Inter', sans-serif; font-size: 12.5px; text-decoration: underline; padding: 4px;
+}
+.footer-link:hover { color: var(--accent); }
+
+.auth-form textarea {
+  background: var(--surface-alt); border: 1px solid var(--border); color: var(--text);
+  padding: 10px 12px; border-radius: 6px; font-family: 'Inter', sans-serif; font-size: 14px;
+  resize: vertical; line-height: 1.5; width: 100%;
+}
+
 /* ---- Pestaña de progresión ---- */
 .progress-tab { padding-bottom: 30px; }
 .stat-grid {

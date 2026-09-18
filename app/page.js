@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { marked } from "marked";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
+import { useToast } from "../lib/ToastContext";
 import SessionsTab from "./SessionsTab";
 import ProgressTab from "./ProgressTab";
 
@@ -95,6 +96,7 @@ function matchesFilters(e, f) {
 
 export default function HomePage() {
   const { user, authLoading, signInWithPassword, signUpWithPassword, signInWithGoogle, signOut } = useAuth();
+  const toast = useToast();
 
   const [activeTab, setActiveTab] = useState("library");
   const [exercises, setExercises] = useState([]);
@@ -108,6 +110,7 @@ export default function HomePage() {
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [profile, setProfile] = useState(null);
   const [healthModalOpen, setHealthModalOpen] = useState(false);
+  const [suggestOpen, setSuggestOpen] = useState(false);
   const [healthScreening, setHealthScreening] = useState(null); // null = aún no cargado/hecho
   const [favorites, setFavorites] = useState(new Set());
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
@@ -223,6 +226,7 @@ export default function HomePage() {
     const { error } = await supabase.from("profiles").update(updates).eq("id", user.id);
     if (!error) {
       setProfile((prev) => ({ ...prev, ...updates }));
+      toast("Perfil actualizado");
     }
     return error;
   }
@@ -445,7 +449,7 @@ export default function HomePage() {
               Editar perfil
               {healthScreening?.has_flag && <span className="health-flag-dot" title="Recomendación de salud pendiente de revisar" />}
             </button>
-            <button className="account-btn" onClick={() => signOut()}>Cerrar sesión</button>
+            <button className="account-btn" onClick={async () => { await signOut(); toast("Sesión cerrada"); }}>Cerrar sesión</button>
           </>
         ) : (
           <button className="account-btn account-btn-primary" onClick={() => setAuthModalOpen(true)}>
@@ -812,6 +816,25 @@ export default function HomePage() {
         </div>
       )}
 
+      <footer className="site-footer">
+        <button className="footer-link" onClick={() => setSuggestOpen(true)}>
+          Enviar una sugerencia
+        </button>
+      </footer>
+
+      {suggestOpen && (
+        <div className="modal-backdrop open" onClick={(e) => e.target === e.currentTarget && setSuggestOpen(false)}>
+          <SuggestionModal
+            user={user}
+            onClose={() => setSuggestOpen(false)}
+            onSent={() => {
+              setSuggestOpen(false);
+              toast("¡Gracias! Tu sugerencia se ha enviado");
+            }}
+          />
+        </div>
+      )}
+
       {healthModalOpen && (
         <div className="modal-backdrop open" onClick={(e) => e.target === e.currentTarget && setHealthModalOpen(false)}>
           <HealthTestModal
@@ -1172,6 +1195,76 @@ function HealthTestModal({ existing, onClose, onSave }) {
       >
         {saving ? "Guardando…" : "Ver resultado"}
       </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Cajón de sugerencias. Cualquiera puede escribir, con cuenta o sin ella.
+// ---------------------------------------------------------------------------
+function SuggestionModal({ user, onClose, onSent }) {
+  const [message, setMessage] = useState("");
+  const [email, setEmail] = useState("");
+  const [sending, setSending] = useState(false);
+  const [errorMsg, setErrorMsg] = useState(null);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (message.trim().length < 3) return;
+    setSending(true);
+    setErrorMsg(null);
+    const { error } = await supabase.from("suggestions").insert({
+      user_id: user?.id ?? null,
+      contact_email: email.trim() || user?.email || null,
+      message: message.trim(),
+    });
+    setSending(false);
+    if (error) {
+      setErrorMsg("No se pudo enviar. Inténtalo de nuevo en un momento.");
+      return;
+    }
+    onSent();
+  }
+
+  return (
+    <div className="modal auth-modal">
+      <button className="close-btn" onClick={onClose} aria-label="Cerrar">
+        ✕
+      </button>
+      <h2>Enviar una sugerencia</h2>
+      <p className="auth-subtitle">
+        Cuéntame qué mejorarías, qué echas en falta o qué no funciona como esperabas. Se lee todo.
+      </p>
+
+      <form onSubmit={handleSubmit} className="auth-form">
+        <label>
+          Tu sugerencia
+          <textarea
+            rows={5}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="Por ejemplo: me gustaría poder filtrar por..."
+            maxLength={4000}
+          />
+        </label>
+        {!user && (
+          <label>
+            Email de contacto <span className="optional-mark">(opcional)</span>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          </label>
+        )}
+
+        {errorMsg && <p className="auth-error">{errorMsg}</p>}
+
+        <button
+          type="submit"
+          className="account-btn account-btn-primary"
+          disabled={sending || message.trim().length < 3}
+          style={{ width: "100%" }}
+        >
+          {sending ? "Enviando…" : "Enviar"}
+        </button>
+      </form>
     </div>
   );
 }
