@@ -187,6 +187,8 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
   const [trainingLog, setTrainingLog] = useState([]); // [{exerciseId, name, mode, sets:[{weight,reps,duration,done}], lastTime}]
   const [trainingLoading, setTrainingLoading] = useState(false);
   const [finishing, setFinishing] = useState(false);
+  const [restLeft, setRestLeft] = useState(null);   // segundos restantes, null = sin descanso activo
+  const [restTotal, setRestTotal] = useState(0);
   const [trainingError, setTrainingError] = useState(null);
 
   useEffect(() => {
@@ -671,6 +673,7 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
       });
 
       let lastTimeLabel = null;
+      let progressHint = null;
       if (prev.length) {
         const p = prev[0];
         if (mode === "time") {
@@ -678,6 +681,18 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
         } else {
           const w = p.weight_kg != null ? `${p.weight_kg} kg × ` : "";
           lastTimeLabel = `Última vez: ${w}${p.reps_done ?? "?"} rep`;
+
+          // Si la última vez completó todas las series llegando al tope del
+          // rango prescrito, es señal de que la carga se ha quedado corta.
+          const topReps = (() => {
+            const nums = String(ri.reps || "").match(/\d+/g);
+            return nums && nums.length ? Number(nums[nums.length - 1]) : null;
+          })();
+          const completedAll = prev.length >= numSets;
+          const allAtTop = topReps != null && prev.every((x) => (x.reps_done || 0) >= topReps);
+          if (completedAll && allAtTop && p.weight_kg != null && p.weight_kg > 0) {
+            progressHint = `Completaste todo el rango la última vez: podrías probar con algo más de peso.`;
+          }
         }
       }
 
@@ -685,11 +700,13 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
         exerciseId: ri.exercise_id,
         name,
         mode,
+        restSeconds: Number(ri.rest_seconds) || 0,
         prescription: mode === "time" ? `${ri.sets ?? 1} × ${ri.duration_seconds}s` : `${ri.sets ?? 1} × ${ri.reps ?? "-"}`,
         loadNote: ri.load_note,
         supersetGroup: ri.superset_group,
         sets,
         lastTimeLabel,
+        progressHint,
       };
     });
 
@@ -707,14 +724,49 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
     );
   }
 
+  // Cuenta atrás del descanso. Se detiene sola al llegar a cero y avisa con una
+  // vibración breve en el móvil, para no obligar a mirar la pantalla.
+  useEffect(() => {
+    if (restLeft === null) return;
+    if (restLeft <= 0) {
+      if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate([180, 90, 180]);
+      setRestLeft(null);
+      return;
+    }
+    const id = setTimeout(() => setRestLeft((v) => (v === null ? null : v - 1)), 1000);
+    return () => clearTimeout(id);
+  }, [restLeft]);
+
+  function startRest(seconds) {
+    const total = Number(seconds) || 0;
+    if (total <= 0) return;
+    setRestTotal(total);
+    setRestLeft(total);
+  }
+
+  function addRest(extra) {
+    setRestLeft((v) => (v === null ? null : Math.max(0, v + extra)));
+    setRestTotal((t) => Math.max(t, (restLeft || 0) + extra));
+  }
+
   function toggleSetDone(exerciseIndex, setIndex) {
+    let justCompleted = false;
     setTrainingLog((prev) =>
       prev.map((item, i) => {
         if (i !== exerciseIndex) return item;
-        const sets = item.sets.map((s, j) => (j === setIndex ? { ...s, done: !s.done } : s));
+        const sets = item.sets.map((s, j) => {
+          if (j !== setIndex) return s;
+          if (!s.done) justCompleted = true;
+          return { ...s, done: !s.done };
+        });
         return { ...item, sets };
       })
     );
+    // El descanso solo arranca al COMPLETAR una serie, no al desmarcarla.
+    if (justCompleted) {
+      const item = trainingLog[exerciseIndex];
+      if (item) startRest(item.restSeconds);
+    }
   }
 
   const completedSetsCount = useMemo(
@@ -807,9 +859,11 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
                   </div>
                   <div className="training-prescription">
                     Plan: {item.prescription}
+                    {item.restSeconds ? ` · descanso ${item.restSeconds}s` : ""}
                     {item.loadNote ? ` · ${item.loadNote}` : ""}
                   </div>
                   {item.lastTimeLabel && <div className="training-lasttime">{item.lastTimeLabel}</div>}
+                  {item.progressHint && <div className="training-progresshint">↑ {item.progressHint}</div>}
 
                   <div className="training-sets">
                     {item.sets.map((s, setIdx) => (
@@ -874,6 +928,23 @@ export default function SessionsTab({ user, exercises, onRequestLogin }) {
               estos valores.
             </p>
           </>
+        )}
+
+        {restLeft !== null && (
+          <div className="rest-bar">
+            <div
+              className="rest-progress"
+              style={{ width: `${restTotal ? (restLeft / restTotal) * 100 : 0}%` }}
+            />
+            <div className="rest-content">
+              <span className="rest-label">Descanso</span>
+              <span className="rest-time">
+                {Math.floor(restLeft / 60)}:{String(restLeft % 60).padStart(2, "0")}
+              </span>
+              <button className="rest-btn" onClick={() => addRest(15)}>+15s</button>
+              <button className="rest-btn" onClick={() => setRestLeft(null)}>Saltar</button>
+            </div>
+          </div>
         )}
       </div>
     );
