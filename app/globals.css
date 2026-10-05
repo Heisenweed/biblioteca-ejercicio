@@ -18,7 +18,13 @@ html, body {
   font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
-.wrap { max-width: 1180px; margin: 0 auto; padding: 32px 20px 80px; }
+.wrap {
+  max-width: 1180px; margin: 0 auto;
+  /* Los insets evitan que el contenido quede bajo la barra de estado o el
+     notch cuando la app se abre instalada a pantalla completa. En escritorio
+     y en navegador normal valen cero, así que no cambian nada. */
+  padding: calc(32px + env(safe-area-inset-top, 0px)) 20px calc(80px + env(safe-area-inset-bottom, 0px));
+}
 
 header.hero { padding: 28px 0 24px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
 .eyebrow {
@@ -277,7 +283,8 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 }
 .rest-content {
   position: relative; display: flex; align-items: center; gap: 12px;
-  max-width: 1180px; margin: 0 auto; padding: 12px 20px;
+  max-width: 1180px; margin: 0 auto;
+  padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
 }
 .rest-label {
   font-family: 'IBM Plex Mono', monospace; font-size: 10px; text-transform: uppercase;

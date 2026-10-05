@@ -1,10 +1,36 @@
 import "./globals.css";
 import { AuthProvider } from "../lib/AuthContext";
 import { ToastProvider } from "../lib/ToastContext";
+import ServiceWorkerRegister from "./ServiceWorkerRegister";
 
 export const metadata = {
   title: "Biblioteca de ejercicios",
-  description: "Biblioteca de ejercicios filtrable y documentos formativos para diseñar tus propias rutinas.",
+  description:
+    "Biblioteca de ejercicios filtrable, artículos de valor y diseñador de sesiones para entrenar con criterio.",
+  manifest: "/manifest.json",
+  // Permite que el móvil la instale en la pantalla de inicio y la abra a
+  // pantalla completa, sin la barra del navegador.
+  appleWebApp: {
+    capable: true,
+    title: "Biblioteca",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+};
+
+export const viewport = {
+  themeColor: "#14161a",
+  width: "device-width",
+  initialScale: 1,
+  // Evita que la interfaz quede bajo la barra de estado o el notch cuando se
+  // abre instalada a pantalla completa.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }) {
@@ -18,6 +44,7 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body>
+        <ServiceWorkerRegister />
         <AuthProvider>
           <ToastProvider>{children}</ToastProvider>
         </AuthProvider>
@@ -25,4 +52,3 @@ export default function RootLayout({ children }) {
     </html>
   );
 }
-
