@@ -271,6 +271,36 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 }
 .bmi-label { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; }
 
+/* ---- Aviso de instalación ---- */
+.install-prompt {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 160;
+  background: var(--surface); border-top: 1px solid var(--accent);
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.45);
+  animation: install-in 0.28s ease-out;
+}
+@keyframes install-in {
+  from { opacity: 0; transform: translateY(100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.install-prompt-inner {
+  max-width: 1180px; margin: 0 auto;
+  padding: 14px 20px calc(14px + env(safe-area-inset-bottom, 0px));
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+}
+.install-prompt-text { flex: 1 1 260px; display: flex; flex-direction: column; gap: 4px; }
+.install-prompt-text strong { font-size: 14px; }
+.install-prompt-text span { font-size: 12.5px; color: var(--text-muted); line-height: 1.5; }
+.ios-share-icon {
+  display: inline-block; border: 1px solid var(--text-muted); border-radius: 4px;
+  padding: 0 4px; font-size: 11px; color: var(--text);
+}
+.install-prompt-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+.install-prompt-dismiss {
+  background: none; border: none; color: var(--text-muted); cursor: pointer;
+  font-family: 'Inter', sans-serif; font-size: 12.5px; padding: 8px 10px; text-decoration: underline;
+}
+.install-prompt-dismiss:hover { color: var(--text); }
+
 /* ---- Temporizador de descanso ---- */
 .rest-bar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 150;

@@ -2,6 +2,7 @@ import "./globals.css";
 import { AuthProvider } from "../lib/AuthContext";
 import { ToastProvider } from "../lib/ToastContext";
 import ServiceWorkerRegister from "./ServiceWorkerRegister";
+import InstallPrompt from "./InstallPrompt";
 
 export const metadata = {
   title: "Biblioteca de ejercicios",
@@ -46,7 +47,10 @@ export default function RootLayout({ children }) {
       <body>
         <ServiceWorkerRegister />
         <AuthProvider>
-          <ToastProvider>{children}</ToastProvider>
+          <ToastProvider>
+            {children}
+            <InstallPrompt />
+          </ToastProvider>
         </AuthProvider>
       </body>
     </html>
