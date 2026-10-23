@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { marked } from "marked";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../lib/ToastContext";
 import SessionsTab from "./SessionsTab";
 import ProgressTab from "./ProgressTab";
+import HomeTab from "./HomeTab";
 
 const LEVEL_NAMES = { beginner: "Principiante", intermediate: "Intermedio", advanced: "Avanzado" };
 const LEVEL_CLASS = { beginner: "beginner", intermediate: "intermediate", advanced: "advanced" };
@@ -98,6 +99,9 @@ export default function HomePage() {
   const { user, authLoading, signInWithPassword, signUpWithPassword, signInWithGoogle, signOut } = useAuth();
   const toast = useToast();
 
+  // Arrancamos en la biblioteca, que es lo que debe ver un visitante sin cuenta:
+  // es el escaparate de la plataforma. Si al resolverse la autenticación resulta
+  // que ya hay sesión activa, el efecto de más abajo lleva al panel de inicio.
   const [activeTab, setActiveTab] = useState("library");
   const [exercises, setExercises] = useState([]);
   const [documents, setDocuments] = useState([]);
@@ -126,6 +130,31 @@ export default function HomePage() {
   const [sortKey, setSortKey] = useState("relevancia");
 
   const [modal, setModal] = useState(null); // { type: 'exercise'|'document', data }
+
+  // ---------------------------------------------------------------------------
+  // Aterrizaje: distinguimos LLEGAR de ACTUAR.
+  //
+  // Si abres la plataforma y ya tienes la sesión activa (el caso habitual, y
+  // también el de la app instalada en el móvil), aterrizas en el panel de
+  // inicio. Pero si inicias sesión en mitad de una navegación que ya habías
+  // empezado — por ejemplo, pulsas la estrella de un ejercicio y eso te pide
+  // identificarte — te quedas donde estabas y se completa lo que ibas a hacer,
+  // en lugar de perder el ejercicio que estabas mirando.
+  //
+  // La decisión se toma UNA sola vez, en cuanto se resuelve la autenticación.
+  // ---------------------------------------------------------------------------
+  const aterrizajeDecidido = useRef(false);
+  useEffect(() => {
+    if (authLoading || aterrizajeDecidido.current) return;
+    aterrizajeDecidido.current = true;
+    if (user) setActiveTab("home");
+  }, [authLoading, user]);
+
+  // El panel de inicio solo existe con sesión iniciada: al cerrar sesión desde
+  // él hay que salir a la biblioteca para no dejar una pantalla sin contenido.
+  useEffect(() => {
+    if (!user && activeTab === "home") setActiveTab("library");
+  }, [user, activeTab]);
 
   useEffect(() => {
     async function fetchAll() {
@@ -439,6 +468,13 @@ export default function HomePage() {
     setModal(null);
   }
 
+  // Mientras no sabemos si hay sesión no podemos saber si esta persona aterriza
+  // en el recibidor o en la biblioteca. En ese instante ocultamos lo que es
+  // propio de un apartado (presentación, contador y barra de pestañas) para que
+  // no aparezca y desaparezca en un parpadeo justo al abrir la plataforma.
+  const enRecibidor = activeTab === "home";
+  const ocultarCromoDeSeccion = enRecibidor || authLoading;
+
   return (
     <div className="wrap">
       <div className="account-bar">
@@ -460,22 +496,45 @@ export default function HomePage() {
 
       <header className="hero">
         <div className="eyebrow">Tu biblioteca personal de entrenamiento</div>
-        <h1>Biblioteca de ejercicios</h1>
-        <p>
-          Filtra ejercicios por músculo, patrón de movimiento, equipamiento, nivel y objetivo. Y no te quedes solo
-          en la teoría: diseña, guarda y sigue tus propias sesiones de entrenamiento aquí mismo, con los artículos
-          de valor para aprender el porqué de cada decisión.
-        </p>
-        {tutorialDoc && (
+        {/* Con sesión iniciada el título es el camino de vuelta al inicio. Es la
+            convención de toda la web, no ocupa espacio nuevo y nos evita una
+            quinta pestaña que en móvil desbordaría la barra. */}
+        {user ? (
+          <h1>
+            <button
+              className="hero-home-link"
+              onClick={() => setActiveTab("home")}
+              title="Volver al inicio"
+              aria-label="Volver al panel de inicio"
+            >
+              Biblioteca de ejercicios
+            </button>
+          </h1>
+        ) : (
+          <h1>Biblioteca de ejercicios</h1>
+        )}
+        {/* En el panel de inicio esta presentación sobra: el propio panel ya
+            explica a dónde puede ir cada persona, y el objetivo es que entrar
+            resulte tranquilo. */}
+        {!ocultarCromoDeSeccion && (
+          <p>
+            Filtra ejercicios por músculo, patrón de movimiento, equipamiento, nivel y objetivo. Y no te quedes solo
+            en la teoría: diseña, guarda y sigue tus propias sesiones de entrenamiento aquí mismo, con los artículos
+            de valor para aprender el porqué de cada decisión.
+          </p>
+        )}
+        {tutorialDoc && !ocultarCromoDeSeccion && (
           <button className="tutorial-cta" onClick={() => openDocument(tutorialDoc)}>
             📖 ¿Primera vez aquí? Mira la guía rápida de la app
           </button>
         )}
-        {!loading && !error && (
+        {!loading && !error && !ocultarCromoDeSeccion && (
           <div className="counter">
             {exercises.length} ejercicios · {documents.length} documentos cargados
           </div>
         )}
+        {/* El aviso de salud se mantiene en todas las pantallas a propósito: es
+            un descargo de responsabilidad y no debe depender de dónde estés. */}
         <p className="health-disclaimer">
           Antes de entrenar por tu cuenta, es importante conocer tu estado de salud. Tienes disponible un{" "}
           <button
@@ -488,7 +547,9 @@ export default function HomePage() {
         </p>
       </header>
 
-      <div className="tabs">
+      {/* Dentro del recibidor la barra de pestañas es redundante: el propio
+          panel es la navegación. Reaparece en cuanto entras en un apartado. */}
+      <div className="tabs" hidden={ocultarCromoDeSeccion}>
         <button
           className={`tab-btn ${activeTab === "library" ? "active" : ""}`}
           onClick={() => setActiveTab("library")}
@@ -522,6 +583,21 @@ export default function HomePage() {
           Prueba a recargar la página. Si el problema continúa, cierra sesión y vuelve a entrar, o abre la
           aplicación en una ventana privada del navegador.
         </div>
+      )}
+
+      {!loading && !error && enRecibidor && user && (
+        <HomeTab
+          user={user}
+          profile={profile}
+          exerciseCount={exercises.length}
+          favoriteCount={favorites.size}
+          articleCount={articleDocuments.length}
+          tutorialDoc={tutorialDoc}
+          healthScreening={healthScreening}
+          onNavigate={setActiveTab}
+          onOpenTutorial={() => tutorialDoc && openDocument(tutorialDoc)}
+          onOpenHealthTest={() => setHealthModalOpen(true)}
+        />
       )}
 
       {!loading && !error && activeTab === "library" && (

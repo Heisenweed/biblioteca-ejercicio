@@ -18,13 +18,7 @@ html, body {
   font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
-.wrap {
-  max-width: 1180px; margin: 0 auto;
-  /* Los insets evitan que el contenido quede bajo la barra de estado o el
-     notch cuando la app se abre instalada a pantalla completa. En escritorio
-     y en navegador normal valen cero, así que no cambian nada. */
-  padding: calc(32px + env(safe-area-inset-top, 0px)) 20px calc(80px + env(safe-area-inset-bottom, 0px));
-}
+.wrap { max-width: 1180px; margin: 0 auto; padding: 32px 20px 80px; }
 
 header.hero { padding: 28px 0 24px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
 .eyebrow {
@@ -271,36 +265,6 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 }
 .bmi-label { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; }
 
-/* ---- Aviso de instalación ---- */
-.install-prompt {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 160;
-  background: var(--surface); border-top: 1px solid var(--accent);
-  box-shadow: 0 -4px 20px rgba(0,0,0,0.45);
-  animation: install-in 0.28s ease-out;
-}
-@keyframes install-in {
-  from { opacity: 0; transform: translateY(100%); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.install-prompt-inner {
-  max-width: 1180px; margin: 0 auto;
-  padding: 14px 20px calc(14px + env(safe-area-inset-bottom, 0px));
-  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-}
-.install-prompt-text { flex: 1 1 260px; display: flex; flex-direction: column; gap: 4px; }
-.install-prompt-text strong { font-size: 14px; }
-.install-prompt-text span { font-size: 12.5px; color: var(--text-muted); line-height: 1.5; }
-.ios-share-icon {
-  display: inline-block; border: 1px solid var(--text-muted); border-radius: 4px;
-  padding: 0 4px; font-size: 11px; color: var(--text);
-}
-.install-prompt-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
-.install-prompt-dismiss {
-  background: none; border: none; color: var(--text-muted); cursor: pointer;
-  font-family: 'Inter', sans-serif; font-size: 12.5px; padding: 8px 10px; text-decoration: underline;
-}
-.install-prompt-dismiss:hover { color: var(--text); }
-
 /* ---- Temporizador de descanso ---- */
 .rest-bar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 150;
@@ -313,8 +277,7 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 }
 .rest-content {
   position: relative; display: flex; align-items: center; gap: 12px;
-  max-width: 1180px; margin: 0 auto;
-  padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
+  max-width: 1180px; margin: 0 auto; padding: 12px 20px;
 }
 .rest-label {
   font-family: 'IBM Plex Mono', monospace; font-size: 10px; text-transform: uppercase;
@@ -842,3 +805,97 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   font-family: 'IBM Plex Mono', monospace; font-size: 13px;
 }
 .error-state { color: var(--danger); }
+
+/* ========================================================================== */
+/* PANEL DE INICIO ("recibidor")                                              */
+/* Primera pantalla con sesión iniciada. Prioridad: calma visual. Bloques     */
+/* grandes, mucho aire, una sola jerarquía de lectura por tarjeta.            */
+/* ========================================================================== */
+
+/* El título de la cabecera actúa como vuelta al inicio. Hereda la tipografía
+   del h1 para que se vea exactamente igual, con una señal discreta de que se
+   puede pulsar. */
+.hero-home-link {
+  background: none; border: none; padding: 0; margin: 0; cursor: pointer;
+  font: inherit; color: inherit; letter-spacing: inherit; text-align: left;
+  border-bottom: 2px solid transparent; transition: border-color 0.15s ease, color 0.15s ease;
+}
+.hero-home-link:hover { color: var(--accent); border-bottom-color: var(--accent-dim); }
+.hero-home-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+
+.home-panel { padding-top: 4px; }
+
+.home-greeting { margin-bottom: 26px; }
+.home-greeting h2 {
+  font-family: 'Space Grotesk', sans-serif; font-weight: 600;
+  font-size: clamp(22px, 3vw, 28px); margin: 0 0 6px; letter-spacing: -0.01em;
+}
+.home-greeting p { color: var(--text-muted); font-size: 14.5px; margin: 0; }
+
+.home-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 28px;
+}
+
+.home-card {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start;
+  gap: 6px; text-align: left; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 22px 26px;
+  font-family: 'Inter', sans-serif; color: var(--text);
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+.home-card:hover { border-color: var(--accent-dim); background: var(--surface-alt); }
+.home-card:active { transform: translateY(1px); }
+.home-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Jerarquía de lectura, de más a menos visible: nombre del apartado, tu dato,
+   dato general. El nombre es lo que buscas cuando quieres ir a un sitio; la
+   cifra personal es lo que te interesa al llegar; el dato general es contexto. */
+.home-card-title {
+  font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 20px;
+  line-height: 1.25; color: var(--text); letter-spacing: -0.01em; padding-right: 26px;
+}
+.home-card-personal {
+  font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 15px;
+  line-height: 1.3; color: var(--accent); letter-spacing: -0.005em; margin-top: 2px;
+}
+.home-card-general {
+  font-size: 13px; line-height: 1.5; color: var(--text-muted); max-width: 40ch;
+  margin-top: 1px;
+}
+.home-card-arrow {
+  position: absolute; top: 22px; right: 24px; color: var(--text-muted);
+  font-size: 17px; transition: color 0.15s ease, transform 0.15s ease;
+}
+.home-card:hover .home-card-arrow { color: var(--accent); transform: translateX(3px); }
+
+/* Fila secundaria: guía de la app y test de prevención. Deliberadamente más
+   discretas que los cuatro bloques principales. */
+.home-secondary { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+
+.home-mini-card {
+  display: flex; align-items: center; gap: 14px; text-align: left; cursor: pointer;
+  background: none; border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px 18px; color: var(--text); font-family: 'Inter', sans-serif;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.home-mini-card:hover { border-color: var(--teal); background: var(--surface); }
+.home-mini-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.home-mini-card > span:last-child { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.home-mini-card strong {
+  font-family: 'Space Grotesk', sans-serif; font-size: 14.5px; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.home-mini-card em { font-style: normal; font-size: 12.5px; color: var(--text-muted); line-height: 1.45; }
+.home-mini-icon { font-size: 20px; flex-shrink: 0; }
+
+.home-stats-error {
+  margin: 20px 0 0; font-size: 12.5px; color: var(--text-muted);
+  font-family: 'IBM Plex Mono', monospace; line-height: 1.5;
+}
+
+@media (max-width: 760px) {
+  .home-grid, .home-secondary { grid-template-columns: 1fr; }
+  .home-card { padding: 20px 22px; }
+  .home-card-arrow { top: 20px; right: 20px; }
+}
